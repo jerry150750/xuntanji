@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#181B24"/>
+      <stop offset="100%" stop-color="#232938"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#24C789"/>
+      <stop offset="100%" stop-color="#0EA5E9"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="78" fill="none" stroke="#2D3345" stroke-width="20"/>
+  <path d="M128 50 A78 78 0 1 1 56 158" fill="none" stroke="url(#ring)" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="182" cy="74" r="11" fill="#FF6B35"/>
+  <text x="128" y="139" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="42" fill="#FFFFFF" letter-spacing="1">CF</text>
+</svg>
