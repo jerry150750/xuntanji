@@ -3,7 +3,7 @@
    连接 Python SQLite 持久化 API，并在本地维护 LocalStorage 镜像备份。
    ========================================================================== */
 window.App = (function () {
-  const APP_VERSION = '1.5.0';
+  const APP_VERSION = '1.5.1';
 
   const ACTIVITY_MULTIPLIERS = {
     sedentary: 1.2,
