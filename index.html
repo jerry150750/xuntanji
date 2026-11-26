@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#181B24" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>循碳记 CARBFLOW — AI 智能碳循环减脂管理</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <link rel="stylesheet" href="./styles.css?v=6" />
+</head>
+<body>
+  <!-- ==================== 进入 APP 前的原生启动屏 & 沉浸式分步引导界面 ==================== -->
+  <div id="appEntryOverlay" class="entry-overlay">
+    <div class="entry-container">
+      <!-- 阶段 A：老用户冷启动品牌欢迎屏（0.7秒丝滑过渡进入首页） -->
+      <div id="obBootSplash" class="boot-splash-box">
+        <img src="./icon.svg" alt="循碳记 CARBFLOW" class="splash-ring-logo" />
+        <div style="margin-top:18px; font-size:22px; font-weight:900; letter-spacing:0.5px;">循碳记 <span style="color:#4AE8AB; font-size:15px;">CARBFLOW</span></div>
+        <div id="obBootGreeting" style="margin-top:6px; font-size:13px; color:#9CA8BD;">AI 驱动的科学碳循环减脂管家</div>
+      </div>
+
+      <!-- 阶段 B：首次进入 / 点击「引导」时的 4 步沉浸式定制向导 -->
+      <div id="obWizardWrap" style="display:none; flex-direction:column; justify-content:space-between; flex:1; gap:14px;">
+        <div class="onboard-topbar">
+          <div class="onboard-dots" id="obStepDots">
+            <span class="onboard-dot active"></span>
+            <span class="onboard-dot"></span>
+            <span class="onboard-dot"></span>
+            <span class="onboard-dot"></span>
+          </div>
+          <button type="button" class="onboard-skip-btn" onclick="App.skipOnboarding()">跳过引导 &gt;</button>
+        </div>
+
+        <!-- Step 0: 品牌欢迎与核心亮点导览 -->
+        <div id="obStep0" class="onboard-step active">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:2px;">
+            <img src="./icon.svg" alt="logo" style="width:54px; height:54px; border-radius:15px; box-shadow:0 8px 24px rgba(36,199,137,0.3);" />
+            <span class="onboard-hero-badge" style="align-self:center;">✨ AI CARBON CYCLING</span>
+          </div>
+          <div class="onboard-title">欢迎来到循碳记<br/><span style="color:#4AE8AB;">科学碳循环，减脂不掉肌</span></div>
+          <div class="onboard-sub">进入 App 前只需 30 秒，结合你的身高体重与运动习惯，为你自动生成精准到克的每日碳循环减脂方案：</div>
+
+          <div class="feature-list">
+            <div class="feature-card">
+              <div class="feature-icon">🔥</div>
+              <div>
+                <h4>自由高低碳排程（支持 0 中碳）</h4>
+                <p>训练日高碳冲刺补充肌糖原、休息日低碳高效燃脂，自动确保 7 日热量缺口精准达标。</p>
+              </div>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon">📷</div>
+              <div>
+                <h4>三视图体脂评估 &amp; 中餐拍照识餐</h4>
+                <p>上传身体正面/侧面/背面照评估体脂率，家常菜或外卖拍照、打字均可秒算三大营养素。</p>
+              </div>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon">🔒</div>
+              <div>
+                <h4>本地大容量隐私存储 · 离线可用</h4>
+                <p>所有照片、打卡与 7 日体重均线保存在手机本地数据库，也可随时接入多模态真 AI。</p>
+              </div>
+            </div>
+          </div>
+
+          <button type="button" class="btn-ob-next" style="width:100%; margin-top:6px;" onclick="App.goOnboardStep(1)">开始定制我的专属方案 →</button>
+        </div>
+
+        <!-- Step 1: 基础身体档案 -->
+        <div id="obStep1" class="onboard-step">
+          <div>
+            <span class="onboard-hero-badge">STEP 1 / 3 · 基础身体参数</span>
+            <div class="onboard-title" style="margin-top:8px; font-size:21px;">告诉我们你的基础身体数据</div>
+            <div class="onboard-sub" style="margin-top:3px;">用于通过 Mifflin-St Jeor 公式精确计算你的基础代谢 (BMR)。</div>
+          </div>
+
+          <div class="ob-glass-card">
+            <div style="margin-bottom:10px;">
+              <label class="ob-label">你的昵称 / 称呼</label>
+              <input type="text" id="obNickname" class="ob-input" value="减脂进阶者" placeholder="例如：阿泽 / 小林" />
+            </div>
+
+            <div style="margin-bottom:10px;">
+              <label class="ob-label">生理性别</label>
+              <div class="ob-choice-grid">
+                <button type="button" id="obGenderMale" class="ob-choice-card active" onclick="App.selectOnboardGender('male')">
+                  <div class="ob-choice-title">🚹 男生</div>
+                  <div class="ob-choice-desc">男性肌肉代谢系数</div>
+                </button>
+                <button type="button" id="obGenderFemale" class="ob-choice-card" onclick="App.selectOnboardGender('female')">
+                  <div class="ob-choice-title">🚺 女生</div>
+                  <div class="ob-choice-desc">女性体脂生理系数</div>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <div>
+                <label class="ob-label">年龄 (岁)</label>
+                <input type="number" id="obAge" class="ob-input" min="14" max="85" value="22" oninput="App.updateOnboardLiveCalc()" />
+              </div>
+              <div>
+                <label class="ob-label">身高 (cm)</label>
+                <input type="number" id="obHeight" class="ob-input" step="0.5" min="130" max="225" value="178" oninput="App.updateOnboardLiveCalc()" />
+              </div>
+              <div>
+                <label class="ob-label">当前体重 (kg)</label>
+                <input type="number" id="obWeight" class="ob-input" step="0.1" min="35" max="220" value="75" oninput="App.updateOnboardLiveCalc()" />
+              </div>
+              <div>
+                <label class="ob-label">腰围 (cm · 选填)</label>
+                <input type="number" id="obWaist" class="ob-input" step="0.5" value="82" placeholder="辅助估算体脂" oninput="App.updateOnboardLiveCalc()" />
+              </div>
+            </div>
+          </div>
+
+          <div id="obLivePreview1" class="ob-live-pill">实时测算中...</div>
+
+          <div class="ob-btn-row">
+            <button type="button" class="btn-ob-back" onclick="App.goOnboardStep(0)">← 返回</button>
+            <button type="button" class="btn-ob-next" onclick="App.goOnboardStep(2)">下一步：运动与目标 →</button>
+          </div>
+        </div>
+
+        <!-- Step 2: 日常活动强度与目标体脂 -->
+        <div id="obStep2" class="onboard-step">
+          <div>
+            <span class="onboard-hero-badge">STEP 2 / 3 · 代谢消耗与减脂目标</span>
+            <div class="onboard-title" style="margin-top:8px; font-size:21px;">日常运动量与目标体脂率</div>
+            <div class="onboard-sub" style="margin-top:3px;">决定每日总消耗 (TDEE) 与合理的热量缺口，进入 App 后也可上传三视图做 AI 体脂评估。</div>
+          </div>
+
+          <div class="ob-glass-card">
+            <label class="ob-label">日常活动与运动强度</label>
+            <div class="ob-choice-grid" style="margin-bottom:12px;">
+              <button type="button" id="obAct_sedentary" class="ob-choice-card" onclick="App.selectOnboardActivity('sedentary')">
+                <div class="ob-choice-title">🪑 久坐办公</div>
+                <div class="ob-choice-desc">极少运动 · 系数 1.2</div>
+              </button>
+              <button type="button" id="obAct_light" class="ob-choice-card active" onclick="App.selectOnboardActivity('light')">
+                <div class="ob-choice-title">🚶 轻度活动</div>
+                <div class="ob-choice-desc">周练1-3次 · 1.375</div>
+              </button>
+              <button type="button" id="obAct_moderate" class="ob-choice-card" onclick="App.selectOnboardActivity('moderate')">
+                <div class="ob-choice-title">🏋️ 规律训练</div>
+                <div class="ob-choice-desc">周练3-5次 · 1.55</div>
+              </button>
+              <button type="button" id="obAct_active" class="ob-choice-card" onclick="App.selectOnboardActivity('active')">
+                <div class="ob-choice-title">🔥 高频高强</div>
+                <div class="ob-choice-desc">周练6-7次 · 1.725</div>
+              </button>
+            </div>
+
+            <div class="form-grid" style="margin-bottom:10px;">
+              <div>
+                <label class="ob-label">
+                  <span>当前体脂率 (%)</span>
+                  <span style="color:#4AE8AB; cursor:pointer; text-decoration:underline;" onclick="App.autoEstimateOnboardBf()">⚡智能初估</span>
+                </label>
+                <input type="number" id="obCurrentBf" class="ob-input" step="0.5" min="5" max="50" value="18.0" oninput="App.updateOnboardLiveCalc()" />
+              </div>
+              <div>
+                <label class="ob-label">目标体脂率 (%)</label>
+                <input type="number" id="obTargetBf" class="ob-input" step="0.5" min="5" max="42" value="13.0" oninput="App.updateOnboardLiveCalc()" />
+              </div>
+            </div>
+
+            <div>
+              <label class="ob-label">
+                <span>每日热量缺口（推荐 400~600 kcal）</span>
+                <strong id="obDeficitLbl" style="color:#4AE8AB;">500 kcal</strong>
+              </label>
+              <input type="range" id="obDeficit" min="250" max="800" step="50" value="500" oninput="App.updateOnboardLiveCalc()" />
+            </div>
+          </div>
+
+          <div id="obLivePreview2" class="ob-live-pill">实时测算中...</div>
+
+          <div class="ob-btn-row">
+            <button type="button" class="btn-ob-back" onclick="App.goOnboardStep(1)">← 上一步</button>
+            <button type="button" class="btn-ob-next" onclick="App.goOnboardStep(3)">下一步：选碳循环节奏 →</button>
+          </div>
+        </div>
+
+        <!-- Step 3: 选择碳循环排程节奏并进入 App -->
+        <div id="obStep3" class="onboard-step">
+          <div>
+            <span class="onboard-hero-badge">STEP 3 / 3 · 专属碳循环节奏</span>
+            <div class="onboard-title" style="margin-top:8px; font-size:21px;">选择适合你的每周碳循环排程</div>
+            <div class="onboard-sub" style="margin-top:3px;">进入 App 后仍可随时点击周历任意一天单独修改高/中/低碳日。</div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <button type="button" id="obRhythm_0" class="ob-choice-card active" onclick="App.selectOnboardRhythm(0)">
+              <div class="ob-choice-title">🔥 经典 3高 4低（推荐 · 0中碳日）</div>
+              <div class="ob-choice-desc">周二/四/六练大肌群吃高碳控油，周一/三/五/日低碳刷脂，简单高效易坚持</div>
+            </button>
+            <button type="button" id="obRhythm_1" class="ob-choice-card" onclick="App.selectOnboardRhythm(1)">
+              <div class="ob-choice-title">💪 力量保肌 4高 3低（0中碳日）</div>
+              <div class="ob-choice-desc">周一/三/五/六高碳日，适合每周抗阻举铁 ≥4 次、追求训练泵感人群</div>
+            </button>
+            <button type="button" id="obRhythm_2" class="ob-choice-card" onclick="App.selectOnboardRhythm(2)">
+              <div class="ob-choice-title">🌿 温和过渡 2高 3中 2低</div>
+              <div class="ob-choice-desc">含 3 天中碳缓冲日，波动平缓，适合第一次接触碳循环的新手</div>
+            </button>
+            <button type="button" id="obRhythm_3" class="ob-choice-card" onclick="App.selectOnboardRhythm(3)">
+              <div class="ob-choice-title">⚡ 快速刷脂 2高 5低（0中碳日）</div>
+              <div class="ob-choice-desc">仅周三/周六高碳日补充瘦素，其余 5 天低碳控卡，适合突破平台期</div>
+            </button>
+          </div>
+
+          <div id="obPlanSummaryBox" class="ob-live-pill">方案预览生成中...</div>
+
+          <div class="ob-btn-row">
+            <button type="button" class="btn-ob-back" onclick="App.goOnboardStep(2)">← 上一步</button>
+            <button type="button" class="btn-ob-next" onclick="App.finishOnboarding()">🚀 生成方案并进入循碳记</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="appShell" class="app-shell">
+    <!-- 顶部品牌状态栏 -->
+    <header class="top-bar">
+      <div class="brand-wrap">
+        <img src="./icon.svg" alt="循碳记 CARBFLOW" class="brand-logo" />
+        <div>
+          <div class="brand-title">循碳记 <span style="font-size:12px; font-weight:600; opacity:0.75;">CARBFLOW</span></div>
+          <div class="brand-subtitle" id="topStatusSub">AI 智能碳循环减脂管理</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="icon-chip" id="btnReopenGuide" onclick="App.openOnboardingWizard()" title="重新打开新手定制引导">✨ 引导</button>
+        <button class="icon-chip" id="btnOpenAiModal" onclick="App.openAiModal()" title="配置真实多模态视觉大模型 API">
+          <span id="aiStatusDot" class="status-dot"></span><span id="aiStatusText">配置真AI</span>
+        </button>
+        <button class="icon-chip desktop-only" id="btnToggleWide" title="切换手机/宽屏视图">宽屏视图</button>
+        <button class="icon-chip" id="btnQuickCheckin">打卡</button>
+      </div>
+    </header>
+
+    <!-- 应用内热更新横幅（检测到新版本时自动弹出，无需重装 APK） -->
+    <div id="appUpdateBanner" class="card" style="display:none; background:linear-gradient(135deg,#181B24 0%,#23312D 100%); color:#FFF; border:1px solid #24C789; padding:12px 14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <div style="flex:1;">
+          <div style="font-weight:800; font-size:13.5px; color:#4AE8AB;" id="appUpdateTitle">🚀 发现新版本，支持应用内直接更新</div>
+          <div style="font-size:11.5px; color:#CBD5E1; margin-top:2px;" id="appUpdateDesc">点击右侧立即刷新应用最新功能，您的照片与打卡数据将完整保留。</div>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button type="button" class="btn btn-primary btn-sm" onclick="App.applyInAppUpdate()">立即更新</button>
+          <button type="button" class="btn btn-outline btn-sm" style="background:rgba(255,255,255,0.1); color:#CBD5E1; border-color:rgba(255,255,255,0.2);" onclick="App.dismissUpdateBanner()">稍后</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 1: 今日总览 ==================== -->
+    <section id="tab-home" class="tab-page active">
+      <!-- 首次使用引导横幅 -->
+      <div id="onboardingBanner" class="card" style="display:none; background: linear-gradient(135deg, #E8FBF3 0%, #F0F7FF 100%); border-color:#A7F3D0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <div>
+            <div style="font-weight:800; font-size:14.5px; color:#065F46;">👋 欢迎来到 CARBFLOW 智能减脂</div>
+            <div style="font-size:12px; color:#047857; margin-top:3px;">建议先完善身体档案并体验三视图 AI 体脂评估，定制专属碳循环方案。</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="App.switchTab('profile')">立即评估</button>
+        </div>
+      </div>
+
+      <!-- 今日碳循环核心仪表盘（Keep 暗色质感大卡） -->
+      <div class="card card-dark">
+        <div class="card-header" style="margin-bottom:6px;">
+          <div>
+            <div style="font-size:12px; color:#9CA5B8;" id="homeDateText">--</div>
+            <div style="font-size:17px; font-weight:800; margin-top:2px;" id="homeGreeting">今日碳循环执行面板</div>
+          </div>
+          <span id="homeDayBadge" class="day-badge low">低碳日</span>
+        </div>
+
+        <div class="hero-grid">
+          <div class="ring-box">
+            <svg width="126" height="126" viewBox="0 0 126 126">
+              <circle cx="63" cy="63" r="52" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="11" />
+              <circle id="homeKcalRing" cx="63" cy="63" r="52" fill="none" stroke="#24C789" stroke-width="11"
+                stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"
+                transform="rotate(-90 63 63)" style="transition: stroke-dashoffset 0.45s ease;" />
+            </svg>
+            <div class="ring-center">
+              <div class="ring-kcal-val" id="homeRemainKcal">0</div>
+              <div class="ring-kcal-lbl" id="homeRemainLabel">还可摄入 kcal</div>
+            </div>
+          </div>
+
+          <div class="macro-bars">
+            <div>
+              <div class="macro-row-top">
+                <span>🍚 碳水化合物</span>
+                <span id="homeCarbText">0 / 0g</span>
+              </div>
+              <div class="macro-bar-bg"><div id="homeCarbBar" class="macro-bar-fill fill-carb" style="width:0%"></div></div>
+            </div>
+            <div>
+              <div class="macro-row-top">
+                <span>🥩 蛋白质</span>
+                <span id="homeProteinText">0 / 0g</span>
+              </div>
+              <div class="macro-bar-bg"><div id="homeProteinBar" class="macro-bar-fill fill-protein" style="width:0%"></div></div>
+            </div>
+            <div>
+              <div class="macro-row-top">
+                <span id="homeFatTitle">🥑 脂肪</span>
+                <span id="homeFatText">0 / 0g</span>
+              </div>
+              <div class="macro-bar-bg"><div id="homeFatBar" class="macro-bar-fill fill-fat" style="width:0%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; padding-top:10px; border-top:1px solid rgba(255,255,255,0.09); font-size:11.5px; color:#A8B1C4;">
+          <span id="homeRuleNote">规则加载中...</span>
+          <span>已吃 <strong style="color:#FFF" id="homeEatenKcal">0</strong> / 目标 <strong style="color:#4AE8AB" id="homeTargetKcal">0</strong> kcal</span>
+        </div>
+      </div>
+
+      <!-- 本周7天碳循环日历速览（点击可切换预览或跳转排程） -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">本周碳循环排程</h3>
+          <button class="btn btn-outline btn-sm" onclick="App.switchTab('plan')">自由排程 &gt;</button>
+        </div>
+        <div id="homeWeekStrip" class="week-strip"></div>
+        <div style="margin-top:10px; font-size:12px; color:var(--text-sub); display:flex; justify-content:space-between;">
+          <span id="homeScheduleSummary">高碳 3 天 · 中碳 0 天 · 低碳 4 天</span>
+          <span id="homeWeeklyAvgKcal">周均 0 kcal/天</span>
+        </div>
+      </div>
+
+      <!-- 身体代谢与减脂目标进度卡 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">代谢与减脂目标透视</h3>
+          <span class="card-sub" id="homeBmiTag">BMI --</span>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <div class="metric-lbl">基础代谢 BMR</div>
+            <div class="metric-val"><span id="mBmr">--</span><span class="metric-unit">kcal</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-lbl">总消耗 TDEE</div>
+            <div class="metric-val"><span id="mTdee">--</span><span class="metric-unit">kcal</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-lbl">日均目标热量</div>
+            <div class="metric-val" style="color:var(--keep-green-dark)"><span id="mTargetKcal">--</span><span class="metric-unit">kcal</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-lbl">当前 → 目标体脂</div>
+            <div class="metric-val"><span id="mBfPair">--</span><span class="metric-unit">%</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-lbl">目标体重参考</div>
+            <div class="metric-val"><span id="mIdealWeight">--</span><span class="metric-unit">kg</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-lbl">预计减脂速度</div>
+            <div class="metric-val"><span id="mWeeklyLoss">--</span><span class="metric-unit">kg/周</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 今日剩余营养缺口 AI 配餐建议 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">AI 碳循环智能配餐建议</h3>
+          <button class="btn btn-outline btn-sm" onclick="App.switchTab('diet')">去记饮食 &gt;</button>
+        </div>
+        <div id="homeAiMealRec"></div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: 自由碳循环排程与营养目标 ==================== -->
+    <section id="tab-plan" class="tab-page">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">每周 7 天自由碳循环排程</h3>
+          <span class="card-sub">中碳日非必选，支持0中碳</span>
+        </div>
+
+        <div class="seg-control" style="margin-bottom:12px;">
+          <button class="seg-btn active" id="modeBtnCalendar" onclick="App.setScheduleMode('calendar')">A. 自由日历模式</button>
+          <button class="seg-btn" id="modeBtnAuto" onclick="App.setScheduleMode('auto')">B. 自动排程模式</button>
+        </div>
+
+        <!-- 模式 B：自动排程天数设置面板 -->
+        <div id="autoScheduleBox" style="display:none; background:#F7F9FC; border-radius:14px; padding:12px; margin-bottom:12px; border:1px solid var(--border-light);">
+          <div style="font-size:12px; color:var(--text-sub); margin-bottom:8px;">
+            设定每周高碳、中碳（可设为 <strong>0</strong> 天）、低碳天数（总计 7 天），系统自动均匀分配至周历，生成后仍可点击下方日历微调：
+          </div>
+          <div class="metrics-grid" style="margin-bottom:10px;">
+            <div class="metric-box" style="background:#FFF1EB; border-color:#FDBA9B;">
+              <div class="metric-lbl" style="color:#C2410C;">🔥 高碳日天数</div>
+              <input type="number" id="autoHighDays" class="input" min="0" max="7" value="3" style="margin-top:4px; font-weight:800;" oninput="App.onAutoCountInput('high')" />
+            </div>
+            <div class="metric-box" style="background:#EFF6FF; border-color:#BFDBFE;">
+              <div class="metric-lbl" style="color:#1D4ED8;">⚡ 中碳日(可为0)</div>
+              <input type="number" id="autoMedDays" class="input" min="0" max="7" value="0" style="margin-top:4px; font-weight:800;" oninput="App.onAutoCountInput('med')" />
+            </div>
+            <div class="metric-box" style="background:#ECFDF5; border-color:#A7F3D0;">
+              <div class="metric-lbl" style="color:#047857;">🌿 低碳日天数</div>
+              <input type="number" id="autoLowDays" class="input" min="0" max="7" value="4" style="margin-top:4px; font-weight:800;" oninput="App.onAutoCountInput('low')" />
+            </div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <span id="autoSumHint" style="font-size:12px; font-weight:700; color:var(--keep-green-dark);">当前合计：7 / 7 天</span>
+            <button class="btn btn-primary btn-sm" onclick="App.applyAutoSchedule()">智能排入一周日历</button>
+          </div>
+        </div>
+
+        <!-- 快捷经典模板芯片 -->
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11.5px; color:var(--text-muted); margin-bottom:6px;">一键套用主流碳循环模板（点击下方任意星期卡片可逐天切换 高碳 / 低碳 / 中碳）：</div>
+          <div class="chip-row">
+            <span class="chip" onclick="App.applyQuickTemplate(['low','high','low','high','low','high','low'])">经典3高4低(无中碳·二四六高)</span>
+            <span class="chip" onclick="App.applyQuickTemplate(['high','low','high','low','high','high','low'])">4高3低(0中碳·大肌群强化)</span>
+            <span class="chip" onclick="App.applyQuickTemplate(['low','med','high','low','med','high','med'])">2高3中2低(温和进阶)</span>
+            <span class="chip" onclick="App.applyQuickTemplate(['low','low','high','low','low','high','low'])">2高5低(0中碳·快速刷脂)</span>
+          </div>
+        </div>
+
+        <!-- 交互式7天排程日历 -->
+        <div id="planWeekStrip" class="week-strip"></div>
+        <div style="font-size:11.5px; color:var(--text-muted); margin-top:8px; text-align:center;">
+          💡 点击星期一至星期日任意卡片即可循环切换：<strong style="color:var(--low-carb)">低碳日</strong> → <strong style="color:var(--high-carb)">高碳日</strong> → <strong style="color:var(--med-carb)">中碳日</strong>（无需中碳可跳过）
+        </div>
+      </div>
+
+      <!-- 每日营养素计算策略与偏移自定义 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">每日三大营养素分配策略</h3>
+          <span class="card-sub">自动确保7日均值达标</span>
+        </div>
+
+        <div class="seg-control" style="margin-bottom:12px;">
+          <button class="seg-btn active" id="stratBtnVideo" onclick="App.setMacroStrategy('video_ratio')">经典比例法(80/20控油)</button>
+          <button class="seg-btn" id="stratBtnConst" onclick="App.setMacroStrategy('constant_protein')">恒定蛋白+热量波动法</button>
+        </div>
+
+        <!-- 策略1：经典视频比例配置 -->
+        <div id="videoStrategyPanel" style="background:#F8FAFD; padding:12px; border-radius:12px; border:1px solid var(--border-light); margin-bottom:12px;">
+          <div style="font-size:12px; color:var(--text-sub); margin-bottom:8px;">
+            <strong>当前规则（支持自定义修改）：</strong>
+            高碳日 80%碳水 / 20%蛋白 / 脂肪≤10g；低碳日 30%碳水 / 40%蛋白 / 30%脂肪；中碳日 50%碳水 / 30%蛋白 / 20%脂肪。
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">高碳日 碳水/蛋白(%)</label>
+              <div style="display:flex; gap:6px;">
+                <input type="number" id="vHighCarbPct" class="input" value="80" min="40" max="90" title="高碳日碳水%" />
+                <input type="number" id="vHighProtPct" class="input" value="20" min="10" max="50" title="高碳日蛋白%" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">高碳日 脂肪上限(≤g)</label>
+              <input type="number" id="vHighFatCap" class="input" value="10" min="5" max="40" />
+            </div>
+            <div class="form-group full">
+              <label class="form-label">低碳日 碳水% / 蛋白% / 脂肪%</label>
+              <div style="display:flex; gap:6px;">
+                <input type="number" id="vLowCarbPct" class="input" value="30" min="5" max="60" />
+                <input type="number" id="vLowProtPct" class="input" value="40" min="15" max="65" />
+                <input type="number" id="vLowFatPct" class="input" value="30" min="10" max="65" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 策略2：恒定蛋白进阶法配置 -->
+        <div id="constProteinPanel" style="display:none; background:#F8FAFD; padding:12px; border-radius:12px; border:1px solid var(--border-light); margin-bottom:12px;">
+          <div style="font-size:12px; color:var(--text-sub); margin-bottom:8px;">
+            <strong>恒定蛋白规则：</strong>每日蛋白质稳定维持在固定克数（体重 × 系数），高碳日提高碳水降低脂肪，低碳日降低碳水适度补充优质脂肪。
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label"><span>每日蛋白质系数 (g / kg体重)</span><strong id="lblProtPerKg">2.0 g/kg</strong></label>
+            <input type="range" id="rngProtPerKg" min="1.5" max="2.8" step="0.1" value="2.0" oninput="document.getElementById('lblProtPerKg').textContent=this.value+' g/kg'" />
+          </div>
+        </div>
+
+        <!-- 高碳 / 低碳热量偏移自定义 -->
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label"><span>高碳日热量偏移</span><strong id="lblHighOffset">0%</strong></label>
+            <input type="range" id="rngHighOffset" min="0" max="30" step="5" value="0" oninput="document.getElementById('lblHighOffset').textContent='+'+this.value+'%'" />
+          </div>
+          <div class="form-group">
+            <label class="form-label"><span>低碳日热量偏移</span><strong id="lblLowOffset">0%</strong></label>
+            <input type="range" id="rngLowOffset" min="-30" max="0" step="5" value="0" oninput="document.getElementById('lblLowOffset').textContent=this.value+'%'" />
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary btn-block" onclick="App.saveMacroAndOffsetSettings()">保存营养分配与偏移设置</button>
+        </div>
+
+        <div id="planWarnings" style="margin-top:8px;"></div>
+      </div>
+
+      <!-- 一周7日营养目标总表 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">一周每日营养目标自动核算</h3>
+          <span class="card-sub" id="planAvgVerify">周均 -- kcal</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="plan-table">
+            <thead>
+              <tr>
+                <th>星期</th>
+                <th>类型</th>
+                <th>目标热量</th>
+                <th>碳水</th>
+                <th>蛋白质</th>
+                <th>脂肪</th>
+              </tr>
+            </thead>
+            <tbody id="planTableBody"></tbody>
+          </table>
+        </div>
+
+        <!-- 透明计算公式核验卡片 -->
+        <div class="formula-box" id="formulaDisplayBox"></div>
+      </div>
+
+      <!-- 代谢目标与参数手动微调 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">热量缺口与代谢参数微调</h3>
+          <button class="btn btn-outline btn-sm" onclick="App.resetCustomMetabolism()">恢复公式默认</button>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">目标体脂率 (%)</label>
+            <input type="number" id="planTargetBf" class="input" step="0.5" min="5" max="40" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">每日热量缺口 (kcal)</label>
+            <input type="number" id="planDeficit" class="input" step="50" min="0" max="1200" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">手动修正 BMR (选填)</label>
+            <input type="number" id="planCustomBmr" class="input" placeholder="留空则按Mifflin公式" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">手动指定目标热量 (选填)</label>
+            <input type="number" id="planCustomTargetKcal" class="input" placeholder="留空则按TDEE-缺口" />
+          </div>
+        </div>
+        <button class="btn btn-dark btn-block" onclick="App.saveMetabolicOverrides()">更新目标与代谢参数</button>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: AI 饮食营养估算与记录 ==================== -->
+    <section id="tab-diet" class="tab-page">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label style="font-weight:700; font-size:13px;">饮食日期</label>
+            <input type="date" id="dietDateInput" class="input" style="width:auto; padding:6px 10px;" onchange="App.loadDietForDate(this.value)" />
+          </div>
+          <select id="dietMealType" class="input" style="width:auto; padding:6px 10px; font-weight:700;">
+            <option value="breakfast">🌅 早餐</option>
+            <option value="lunch" selected>☀️ 午餐</option>
+            <option value="dinner">🌙 晚餐</option>
+            <option value="snack">🍎 加餐/练后</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- AI 饮食营养智能估算（支持文字口语输入 + 餐盘拍照真AI视觉识别） -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">AI 饮食营养智能估算</h3>
+          <button class="btn btn-outline btn-sm" onclick="App.openAiModal()">🤖 AI模型设置</button>
+        </div>
+
+        <div class="form-group">
+          <textarea id="aiFoodTextInput" class="input" rows="2" placeholder="输入你吃了什么（如：半份隆江猪脚饭去肥皮+1个卤蛋），或作为拍照识别的补充说明"></textarea>
+        </div>
+
+        <div class="chip-row" style="margin-bottom:10px;">
+          <span class="chip" onclick="App.fillMealSample('2个水煮蛋、1根玉米、1杯无糖豆浆')">示例：2蛋+玉米+豆浆</span>
+          <span class="chip" onclick="App.fillMealSample('180g鸡胸肉，1小碗白米饭，200g白灼西蓝花')">示例：高碳控油减脂餐</span>
+          <span class="chip" onclick="App.fillMealSample('150g原切牛排，半个牛油果，一盘生菜，1个鸡蛋')">示例：低碳高蛋白餐</span>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+          <button type="button" class="btn btn-primary" id="btnRunFoodText" onclick="App.runTextFoodAI()">✨ AI 估算文字营养</button>
+          <button type="button" class="btn btn-dark" id="btnUploadMealPhoto" onclick="App.triggerPhotoUpload('meal')">📷 拍照/选图真AI识餐</button>
+        </div>
+
+        <!-- 餐盘照片缩略图预览 -->
+        <div id="mealPhotoPreviewWrap" style="display:none; margin-top:10px; align-items:center; gap:10px; background:#F8FAFC; padding:8px 10px; border-radius:12px; border:1px solid var(--border-light);">
+          <img id="mealPhotoPreviewImg" src="" alt="meal" style="width:58px; height:58px; object-fit:cover; border-radius:9px;" />
+          <div style="flex:1; font-size:12px; color:var(--text-sub);">
+            <div style="font-weight:700; color:var(--text-main);">餐盘图片已就绪</div>
+            <div id="mealPhotoStatusTxt">已载入照片，点击右侧可重新识别或更换照片</div>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="App.reAnalyzeLastMealPhoto()">重识别</button>
+        </div>
+
+        <!-- AI 识别结果可编辑预览区 -->
+        <div id="aiFoodPreviewBox" style="display:none; margin-top:12px; background:#F7FAF9; border:1px solid #A7F3D0; border-radius:14px; padding:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:6px;">
+            <span style="font-weight:800; font-size:13px; color:#065F46;">🤖 AI 营养拆解结果（可改克数）</span>
+            <span id="aiFoodEngineBadge" class="engine-badge local">本地算法</span>
+          </div>
+          <div id="aiFoodFallbackWarn" class="notice-box" style="display:none; margin-top:0; margin-bottom:8px;"></div>
+          <div id="aiFoodPreviewList"></div>
+          <div id="aiFoodPreviewNote" style="font-size:11.5px; color:var(--text-sub); margin:8px 0;"></div>
+          <button class="btn btn-primary btn-sm btn-block" onclick="App.commitAiFoodItems()">确认记入当前餐次</button>
+        </div>
+      </div>
+
+      <!-- 内置中国常见食物营养库搜索 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">中国常见食物营养库</h3>
+          <span class="card-sub">每100g标准营养</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:8px;">
+          <input type="text" id="foodSearchInput" class="input" placeholder="搜索：米饭 / 鸡胸肉 / 红薯 / 牛肉 / 豆浆 / 麻辣烫..." oninput="App.searchFoodLibrary()" />
+        </div>
+        <div class="chip-row" style="margin-bottom:10px;" id="foodCatChips">
+          <span class="chip active" onclick="App.setFoodCategory('all', this)">全部</span>
+          <span class="chip" onclick="App.setFoodCategory('staple', this)">主食碳水</span>
+          <span class="chip" onclick="App.setFoodCategory('protein', this)">肉蛋奶豆</span>
+          <span class="chip" onclick="App.setFoodCategory('veggie_fruit', this)">蔬果膳食</span>
+          <span class="chip" onclick="App.setFoodCategory('meals_snacks', this)">家常菜/外食</span>
+          <span class="chip" onclick="App.setFoodCategory('fat_nuts', this)">坚果油脂</span>
+        </div>
+        <div id="foodLibraryList" style="max-height:250px; overflow-y:auto;"></div>
+      </div>
+
+      <!-- 当日饮食记录列表 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">当日饮食记录明细</h3>
+          <span class="card-sub" id="dietDaySummaryTxt">共 0 kcal</span>
+        </div>
+        <div id="dietLoggedList"></div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: 每日打卡与减脂趋势分析 ==================== -->
+    <section id="tab-trends" class="tab-page">
+      <!-- 每日身体状态打卡卡片 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">每日身体与训练打卡</h3>
+          <input type="date" id="checkinDate" class="input" style="width:auto; padding:5px 10px; font-size:12.5px;" onchange="App.loadCheckinForDate(this.value)" />
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">空腹体重 (kg) *</label>
+            <input type="number" id="chkWeight" class="input" step="0.1" placeholder="如 79.4" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">腰围 (cm)</label>
+            <input type="number" id="chkWaist" class="input" step="0.1" placeholder="如 81.5" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">臀围 (cm)</label>
+            <input type="number" id="chkHip" class="input" step="0.1" placeholder="如 95.5" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">体脂率 (%, 可选)</label>
+            <input type="number" id="chkBf" class="input" step="0.1" placeholder="选填，如 17.6" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">睡眠时间 (小时)</label>
+            <input type="number" id="chkSleep" class="input" step="0.5" value="7.5" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">当天训练情况</label>
+            <select id="chkWorkout" class="input">
+              <option value="strength_cardio">🏋️ 力量 + 有氧</option>
+              <option value="strength">💪 力量抗阻训练</option>
+              <option value="cardio">🏃 有氧燃脂运动</option>
+              <option value="hiit">⚡ HIIT 功能性训练</option>
+              <option value="rest">🛌 休息恢复日</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">训练表现评分</label>
+            <select id="chkPerf" class="input">
+              <option value="5">5分 - 泵感与力量极佳</option>
+              <option value="4" selected>4分 - 状态良好稳定</option>
+              <option value="3">3分 - 正常发挥</option>
+              <option value="2">2分 - 略感疲惫掉力</option>
+              <option value="1">1分 - 极度乏力/休息</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">全天饥饿程度</label>
+            <select id="chkHunger" class="input">
+              <option value="1">1级 - 饱腹感极强</option>
+              <option value="2" selected>2级 - 轻微可控</option>
+              <option value="3">3级 - 餐前适度饥饿</option>
+              <option value="4">4级 - 比较饥饿嘴馋</option>
+              <option value="5">5级 - 强烈饥饿感</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">身体主观状态</label>
+            <div class="chip-row" id="bodyStateChips">
+              <span class="chip active" onclick="App.selectBodyState('精力充沛', this)">精力充沛</span>
+              <span class="chip" onclick="App.selectBodyState('状态平稳', this)">状态平稳</span>
+              <span class="chip" onclick="App.selectBodyState('肌肉酸痛', this)">肌肉酸痛</span>
+              <span class="chip" onclick="App.selectBodyState('轻度储水', this)">轻度储水</span>
+              <span class="chip" onclick="App.selectBodyState('疲劳乏力', this)">疲劳乏力</span>
+            </div>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">打卡备注</label>
+            <input type="text" id="chkNotes" class="input" placeholder="记录训练重量突破、睡眠或排便水肿情况..." />
+          </div>
+        </div>
+
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-sub); margin-bottom:10px;">
+          <input type="checkbox" id="chkSyncWeight" checked /> 同步将今日体重更新至个人代谢档案
+        </label>
+
+        <button class="btn btn-primary btn-block" onclick="App.submitCheckin()">✅ 保存打卡记录</button>
+      </div>
+
+      <!-- 趋势可视化控制栏 -->
+      <div class="card" style="padding:12px 16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div class="chip-row" id="chartRangeChips">
+            <span class="chip" onclick="App.setChartRange(7, this)">近7天</span>
+            <span class="chip active" onclick="App.setChartRange(14, this)">近14天</span>
+            <span class="chip" onclick="App.setChartRange(30, this)">近30天</span>
+            <span class="chip" onclick="App.setChartRange(365, this)">全部</span>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-outline btn-sm" onclick="App.seedDemoData()">生成14天样本</button>
+            <button class="btn btn-outline btn-sm" onclick="App.clearDemoData()">清空样本</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 图表 1 & 2：体重变化曲线 + 7日平均体重 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">体重变化曲线 &amp; 7日平均体重</h3>
+          <span class="card-sub">过滤碳水储水波动</span>
+        </div>
+        <div class="chart-legend">
+          <span><i class="legend-dot" style="background:#24C789"></i>每日空腹体重(kg)</span>
+          <span><i class="legend-dot" style="background:#181B24"></i>7日移动均线(kg)</span>
+          <span><i class="legend-dot" style="background:#F59E0B"></i>目标参考体重</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartWeight"></canvas></div>
+      </div>
+
+      <!-- 图表 3：腰围与臀围变化曲线 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">腰围与臀围变化曲线</h3>
+          <span class="card-sub">维度收紧更直观</span>
+        </div>
+        <div class="chart-legend">
+          <span><i class="legend-dot" style="background:#3B82F6"></i>腰围(cm)</span>
+          <span><i class="legend-dot" style="background:#8B5CF6"></i>臀围(cm)</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartWaist"></canvas></div>
+      </div>
+
+      <!-- 图表 4：体脂率变化趋势 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">体脂率变化趋势</h3>
+          <span class="card-sub">向目标体脂迈进</span>
+        </div>
+        <div class="chart-legend">
+          <span><i class="legend-dot" style="background:#FF6B35"></i>记录体脂率(%)</span>
+          <span><i class="legend-dot" style="background:#10B981"></i>目标体脂线</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartBf"></canvas></div>
+      </div>
+
+      <!-- 图表 5：每周减重速度 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">每周减重速度分析</h3>
+          <span class="card-sub">正数代表净减重 kg/周</span>
+        </div>
+        <div class="chart-legend">
+          <span><i class="legend-dot" style="background:#24C789"></i>实际周减重(kg)</span>
+          <span><i class="legend-dot" style="background:#F59E0B"></i>计划预计周减脂虚线</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartWeeklySpeed"></canvas></div>
+      </div>
+
+      <!-- 图表 6：每日热量摄入 vs 碳循环目标 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">每日热量摄入 vs 碳循环目标</h3>
+          <span class="card-sub">橙=高碳 蓝=中碳 绿=低碳</span>
+        </div>
+        <div class="chart-legend">
+          <span><i class="legend-dot" style="background:#FF6B35"></i>高碳日摄入</span>
+          <span><i class="legend-dot" style="background:#16B981"></i>低碳日摄入</span>
+          <span><i class="legend-dot" style="background:#181B24"></i>当日目标虚线</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartCalories"></canvas></div>
+      </div>
+
+      <!-- 图表 7：每日三大营养素摄入情况 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">每日三大营养素摄入构成</h3>
+          <span class="card-sub">碳水/蛋白/脂肪克数堆叠</span>
+        </div>
+        <div class="chart-legend">
+          <span><i class="legend-dot" style="background:#FF6B35"></i>碳水(g)</span>
+          <span><i class="legend-dot" style="background:#24C789"></i>蛋白质(g)</span>
+          <span><i class="legend-dot" style="background:#F59E0B"></i>脂肪(g)</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartMacros"></canvas></div>
+      </div>
+
+      <!-- 历史打卡记录查询与修改 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">历史身体打卡记录</h3>
+          <span class="card-sub">点击任意记录可回填修改</span>
+        </div>
+        <div id="checkinHistoryList"></div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 5: 身体档案与三视图视觉 AI 评估 ==================== -->
+    <section id="tab-profile" class="tab-page">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">个人身体与训练档案</h3>
+          <button class="btn btn-outline btn-sm" onclick="App.fillBaselineDemoProfile()">填入186cm/80kg示例</button>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">昵称</label>
+            <input type="text" id="profNickname" class="input" value="减脂进阶者" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">性别</label>
+            <select id="profGender" class="input">
+              <option value="male">男</option>
+              <option value="female">女</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">身高 (cm)</label>
+            <input type="number" id="profHeight" class="input" step="0.5" min="130" max="225" value="186" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">当前体重 (kg)</label>
+            <input type="number" id="profWeight" class="input" step="0.1" min="35" max="220" value="80" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">年龄 (岁)</label>
+            <input type="number" id="profAge" class="input" min="14" max="85" value="20" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">腰围 (cm, 辅助体脂校准)</label>
+            <input type="number" id="profWaist" class="input" step="0.5" value="82" />
+          </div>
+          <div class="form-group full">
+            <label class="form-label">日常活动水平（决定 TDEE 活动系数）</label>
+            <select id="profActivity" class="input" onchange="App.onActivityLevelChange(this.value)">
+              <option value="sedentary">久坐办公（极少运动 · 系数 1.2）</option>
+              <option value="light" selected>轻度活动（每周训练1-3次 / 日常走动 · 系数 1.375）</option>
+              <option value="moderate">中度活动（每周规律训练3-5次 · 系数 1.55）</option>
+              <option value="active">高度活动（每周高强度训练6-7次 · 系数 1.725）</option>
+              <option value="very_active">极高强度（体力劳动+高强度训练 · 系数 1.9）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">TDEE 活动系数(可微调)</label>
+            <input type="number" id="profMultiplier" class="input" step="0.025" min="1.1" max="2.3" value="1.375" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">每周训练频率 (次/周)</label>
+            <input type="number" id="profWorkouts" class="input" min="0" max="7" value="4" />
+          </div>
+          <div class="form-group full">
+            <label class="form-label">主要训练类型</label>
+            <select id="profWorkoutType" class="input">
+              <option value="strength_cardio" selected>力量抗阻 + 有氧减脂结合</option>
+              <option value="strength">纯力量举铁增肌塑形</option>
+              <option value="cardio">跑步/骑行/游泳等有氧运动</option>
+              <option value="hiit">HIIT / 团课功能性训练</option>
+              <option value="home">居家徒手训练</option>
+              <option value="none">暂不运动（纯饮食控制）</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 三视图身体照片上传与视觉 AI 体脂评估 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">三视图视觉 AI 体脂率评估</h3>
+          <div style="display:flex; gap:5px;">
+            <button class="btn btn-outline btn-sm" onclick="App.openAiModal()">🤖 真AI配置</button>
+            <button class="btn btn-outline btn-sm" onclick="App.generateMockBodyPhotos()">示意三视图</button>
+          </div>
+        </div>
+        <div style="font-size:12px; color:var(--text-sub);">
+          请点击下方卡片上传<strong>正面照、侧面照、背面照</strong>（也支持直接把电脑照片<strong>拖拽</strong>到卡片上，上传后自动保存）：
+        </div>
+
+        <div class="photo-slots">
+          <div class="photo-slot" id="slotFront" role="button" tabindex="0" onclick="App.triggerPhotoUpload('front')"
+            ondragover="App.onSlotDragOver(event, this)" ondragleave="App.onSlotDragLeave(event, this)" ondrop="App.onSlotDrop(event, 'front', this)">
+            <span style="font-size:24px;">🧍</span>
+            <span class="photo-slot-label">点击上传正面照</span>
+          </div>
+          <div class="photo-slot" id="slotSide" role="button" tabindex="0" onclick="App.triggerPhotoUpload('side')"
+            ondragover="App.onSlotDragOver(event, this)" ondragleave="App.onSlotDragLeave(event, this)" ondrop="App.onSlotDrop(event, 'side', this)">
+            <span style="font-size:24px;">🚶</span>
+            <span class="photo-slot-label">点击上传侧面照</span>
+          </div>
+          <div class="photo-slot" id="slotBack" role="button" tabindex="0" onclick="App.triggerPhotoUpload('back')"
+            ondragover="App.onSlotDragOver(event, this)" ondragleave="App.onSlotDragLeave(event, this)" ondrop="App.onSlotDrop(event, 'back', this)">
+            <span style="font-size:24px;">🏋️</span>
+            <span class="photo-slot-label">点击上传背面照</span>
+          </div>
+        </div>
+
+        <button class="btn btn-dark btn-block" id="btnRunBodyFat" onclick="App.runBodyFatAI()">🔍 运行视觉 AI 身体状态与体脂评估</button>
+
+        <!-- AI 评估结果展示面板 -->
+        <div id="aiBfResultCard" style="display:none; margin-top:12px; background:#F8FAFC; border-radius:14px; padding:13px; border:1px solid #DCE4F0;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span id="aiBfEngineBadge" class="engine-badge local">本地算法估算</span>
+            <span class="day-badge low" id="aiBfStageTag">标准紧致期</span>
+          </div>
+          <div>
+            <div style="font-size:12px; color:var(--text-sub);">视觉 AI 估算体脂率</div>
+            <div style="font-size:24px; font-weight:900; color:var(--keep-dark);">
+              <span id="aiBfCenterVal">--</span>%
+              <span style="font-size:12px; font-weight:600; color:var(--keep-green-dark);" id="aiBfRangeTxt">(合理区间 --% ~ --%)</span>
+            </div>
+          </div>
+          <div style="font-size:12px; color:var(--text-sub); margin-top:8px; line-height:1.6;" id="aiBfBreakdown"></div>
+          <div id="aiBfAdviceBox" style="display:none; margin-top:8px; font-size:12px; color:#065F46; background:#ECFDF5; padding:8px 10px; border-radius:8px; font-weight:600;"></div>
+          <div class="notice-box" id="aiBfDisclaimer"></div>
+        </div>
+      </div>
+
+      <!-- 手动体脂校准与目标体脂设定 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">当前体脂校准与减脂目标</h3>
+          <span class="card-sub">支持随时手动修改</span>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">当前体脂率 (% 可手动修改)</label>
+            <input type="number" id="profCurrentBf" class="input" step="0.1" min="4" max="50" value="18.0" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">目标体脂率 (%)</label>
+            <input type="number" id="profTargetBf" class="input" step="0.5" min="4" max="42" value="13.0" />
+          </div>
+          <div class="form-group full">
+            <label class="form-label"><span>每日减脂热量缺口 (推荐 300~600 kcal)</span><strong id="lblProfDeficit">500 kcal</strong></label>
+            <input type="range" id="profDeficit" min="200" max="900" step="50" value="500" oninput="document.getElementById('lblProfDeficit').textContent=this.value+' kcal'" />
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-block" onclick="App.saveFullProfile()">💾 保存身体档案并生成个性化碳循环计划</button>
+      </div>
+
+      <!-- 应用版本与免重装热更新卡片 -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">应用版本与在线热更新</h3>
+          <span class="card-sub" id="appVersionBadge">v1.5.0</span>
+        </div>
+        <div style="font-size:12px; color:var(--text-sub); line-height:1.6; margin-bottom:10px;">
+          所有身体照片、体脂记录与打卡数据保存在本地大容量数据库（IndexedDB），应用内更新不会丢失任何历史数据。
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-outline btn-block" id="btnCheckUpdate" onclick="App.checkAppUpdate(true)">🔄 检查应用内更新</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 底部 Keep 质感五栏导航 -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-tab="home" onclick="App.switchTab('home')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z"/></svg>
+        <span>今日</span>
+      </button>
+      <button class="nav-item" data-tab="plan" onclick="App.switchTab('plan')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <span>碳循环</span>
+      </button>
+      <button class="nav-item" data-tab="diet" onclick="App.switchTab('diet')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+        <span>AI饮食</span>
+      </button>
+      <button class="nav-item" data-tab="trends" onclick="App.switchTab('trends')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-7"/></svg>
+        <span>打卡趋势</span>
+      </button>
+      <button class="nav-item" data-tab="profile" onclick="App.switchTab('profile')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
+        <span>身体档案</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- 多模态视觉大模型配置中心弹窗 -->
+  <div id="aiConfigModal" class="modal-backdrop" onclick="if(event.target===this) App.closeAiModal()">
+    <div class="modal-sheet">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div style="font-size:16px; font-weight:800;">🤖 真实多模态大模型配置中心</div>
+        <button class="btn btn-outline btn-sm" onclick="App.closeAiModal()">关闭</button>
+      </div>
+
+      <label style="display:flex; align-items:center; justify-content:space-between; background:#F7FAF9; border:1px solid #A7F3D0; padding:10px 12px; border-radius:12px; margin-bottom:12px; font-weight:700; font-size:13px; color:#065F46;">
+        <span>启用真实多模态 AI（体脂三视图 + 拍照识餐）</span>
+        <input type="checkbox" id="aiCfgEnabled" checked style="width:18px; height:18px;" />
+      </label>
+
+      <div class="form-group">
+        <label class="form-label">选择 AI 服务平台预设</label>
+        <select id="aiCfgProvider" class="input" onchange="App.onAiProviderChange(this.value)">
+          <option value="deepseek">DeepSeek 深度求索 (deepseek-chat / R1 官方接口)</option>
+          <option value="zhipu">智谱清言 GLM-4V（推荐·glm-4v-flash 免费视觉模型）</option>
+          <option value="qwen">阿里云百炼 · 通义千问视觉 Qwen-VL</option>
+          <option value="siliconflow">硅基流动 SiliconFlow (含 DeepSeek-VL2 / Qwen-VL)</option>
+          <option value="doubao">火山方舟 · 豆包视觉 Doubao-Vision</option>
+          <option value="gemini">Google Gemini Vision (gemini-2.5-flash)</option>
+          <option value="openai">OpenAI / 通用兼容接口 (GPT-4o / 中转站)</option>
+        </select>
+      </div>
+
+      <div id="aiProviderGuide" class="formula-box" style="margin-top:0; margin-bottom:10px;"></div>
+
+      <div class="form-group">
+        <label class="form-label">接口地址 Base URL（支持自定义修改）</label>
+        <input type="text" id="aiCfgBaseUrl" class="input" placeholder="https://open.bigmodel.cn/api/paas/v4" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">视觉模型名称 Model</label>
+        <input type="text" id="aiCfgModel" class="input" placeholder="glm-4v-flash" />
+        <div id="aiModelQuickChips" class="chip-row" style="margin-top:6px;"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">
+          <span>API Key 密钥（加密保存在本机数据库）</span>
+          <span id="aiSavedKeyHint" style="font-size:11px; color:var(--keep-green-dark);">未保存密钥</span>
+        </label>
+        <div style="display:flex; gap:6px;">
+          <input type="password" id="aiCfgApiKey" class="input" placeholder="粘贴 API Key（如已保存留空则保持不变）" />
+          <button class="btn btn-outline btn-sm" type="button" onclick="App.toggleApiKeyVisibility()">显示</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="App.clearSavedApiKey()">清空Key</button>
+        </div>
+      </div>
+
+      <label style="display:flex; align-items:center; gap:7px; font-size:12px; color:var(--text-sub); margin-bottom:12px;">
+        <input type="checkbox" id="aiCfgFallback" checked /> 当网络异常或未填 Key 时，自动平滑切换本地智能算法兜底
+      </label>
+
+      <div id="aiTestResultBox" style="display:none; margin-bottom:12px; padding:10px 12px; border-radius:10px; font-size:12px;"></div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1.3fr; gap:8px;">
+        <button class="btn btn-outline" id="btnTestAiConn" onclick="App.testAiConnection()">🔌 测试连接</button>
+        <button class="btn btn-primary" onclick="App.saveAiConfig()">💾 保存 AI 配置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 食物营养库添加克重弹窗（彻底替代易被浏览器拦截的 window.prompt！） -->
+  <div id="foodAddModal" class="modal-backdrop" onclick="if(event.target===this) App.closeAddFoodModal()">
+    <div class="modal-sheet">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="font-size:16px; font-weight:800;" id="addFoodTitle">添加食物</div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="App.closeAddFoodModal()">取消</button>
+      </div>
+      <div id="addFoodSubMeta" style="font-size:12px; color:var(--text-sub); margin-bottom:12px;"></div>
+
+      <div class="form-group">
+        <label class="form-label">快捷份量选择</label>
+        <div class="chip-row" id="addFoodPortionChips"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">食用克重 (g / ml)</label>
+        <div class="stepper-row">
+          <button type="button" class="stepper-btn" onclick="App.stepModalGrams(-20)">−</button>
+          <input type="number" id="addFoodGramsInput" class="input" min="1" step="10" value="150" style="text-align:center; font-weight:800; font-size:16px;" oninput="App.updateAddFoodCalc()" />
+          <button type="button" class="stepper-btn" onclick="App.stepModalGrams(20)">+</button>
+        </div>
+      </div>
+
+      <div id="addFoodLiveCalc" style="background:#F7FAF9; border:1px solid #A7F3D0; border-radius:12px; padding:10px 12px; margin:12px 0; font-size:13px; color:#065F46; font-weight:700;"></div>
+
+      <button type="button" class="btn btn-primary btn-block" onclick="App.confirmAddDbFood()">✅ 确认加入饮食记录</button>
+    </div>
+  </div>
+
+  <!-- 独立持久文件选择器（永不被 innerHTML 重绘销毁，100% 稳定触发文件选择窗口） -->
+  <input type="file" id="fileInputFront" class="hidden-file-input" accept="image/*" onchange="App.onBodyPhotoChange('front', event)" />
+  <input type="file" id="fileInputSide" class="hidden-file-input" accept="image/*" onchange="App.onBodyPhotoChange('side', event)" />
+  <input type="file" id="fileInputBack" class="hidden-file-input" accept="image/*" onchange="App.onBodyPhotoChange('back', event)" />
+  <input type="file" id="fileInputMeal" class="hidden-file-input" accept="image/*" onchange="App.onMealPhotoSelected(event)" />
+
+  <div id="toast" class="toast">已保存</div>
+
+  <script src="./offline_engine.js?v=6"></script>
+  <script src="./charts.js?v=6"></script>
+  <script src="./app.js?v=6"></script>
+</body>
+</html>
