@@ -592,7 +592,8 @@ window.OfflineEngine = (function () {
 
   function parseMealLocal(text) {
     const raw = String(text || '').trim();
-    const segs = raw.split(/[，,、；;＋+\n]|(?<=g)\s+|和|以及|还有|配/).map((s) => s.trim()).filter(Boolean);
+    const normalized = raw.replace(/(\d+(?:\.\d+)?\s*(?:g|G|克|ml|ML|毫升))\s+/g, '$1,');
+    const segs = normalized.split(/[，,、；;＋+\n]|和|以及|还有|配/).map((s) => s.trim()).filter(Boolean);
     const items = [];
     segs.forEach((seg) => {
       let best = null, bestLen = 0;
