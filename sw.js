@@ -1,4 +1,4 @@
-const CACHE_NAME = 'carbflow-v6';
+const CACHE_NAME = 'carbflow-v8';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -35,12 +35,24 @@ self.addEventListener('fetch', (event) => {
   }
   // version.json 永远走网络不缓存，确保实时检测到最新版本
   if (url.includes('version.json')) {
-    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+    event.respondWith(fetch(url, { cache: 'no-store', credentials: 'same-origin' }));
     return;
   }
+  // 同源请求传 URL 字符串 + cache: 'no-cache' 绕过 GitHub Pages max-age=600 HTTP 缓存（注意不直接套用于 event.request navigate 对象，避免 TypeError）
+  const isSameOrigin = (() => {
+    try {
+      return new URL(url).origin === self.location.origin;
+    } catch (_) {
+      return false;
+    }
+  })();
+  const netFetch = isSameOrigin
+    ? fetch(url, { cache: 'no-cache', credentials: 'same-origin' })
+    : fetch(event.request);
+
   // 网络优先策略：联网时自动拉取最新代码实现应用内热更新；断网时无缝回退本地缓存
   event.respondWith(
-    fetch(event.request)
+    netFetch
       .then((resp) => {
         if (resp && resp.ok) {
           const clone = resp.clone();
