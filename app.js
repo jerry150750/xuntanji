@@ -3,7 +3,8 @@
    连接 Python SQLite 持久化 API，并在本地维护 LocalStorage 镜像备份。
    ========================================================================== */
 window.App = (function () {
-  const APP_VERSION = '1.5.5';
+  const APP_VERSION = '1.5.6';
+  const CUSTOM_PRESETS_LS_KEY = 'carbflow_custom_ai_presets_v1';
 
   const ACTIVITY_MULTIPLIERS = {
     sedentary: 1.2,
@@ -55,6 +56,7 @@ window.App = (function () {
     onboardGender: 'male',
     onboardActivity: 'light',
     onboardRhythmIdx: 0,
+    customAiPresets: [],
   };
 
   const ONBOARD_RHYTHMS = [
@@ -167,7 +169,7 @@ window.App = (function () {
     // 仅在标准 Web 浏览器/静态托管 App 壳注册 Service Worker，支持应用内热更新与离线缓存
     const isNativeLocalShell = Boolean(window.plus || window.cordova);
     if (!isNativeLocalShell && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-      navigator.serviceWorker.register('./sw.js?v=9').then((reg) => {
+      navigator.serviceWorker.register('./sw.js?v=10').then((reg) => {
         reg.update().catch(() => {});
         reg.addEventListener('updatefound', () => {
           const nw = reg.installing;
@@ -1950,12 +1952,18 @@ window.App = (function () {
   }
 
   // ==================== 多模态大模型 API 配置中心 ====================
+  function isLocalAiUrl(prov, url) {
+    const u = String(url || '').toLowerCase();
+    return prov === 'ollama' || u.includes('127.0.0.1') || u.includes('localhost') || u.includes('192.168.');
+  }
+
   function updateHeaderAiBadge() {
     const cfg = state.aiSettings;
     const dot = document.getElementById('aiStatusDot');
     const txt = document.getElementById('aiStatusText');
     if (!dot || !txt) return;
-    if (cfg && cfg.enabled && cfg.has_key) {
+    const ready = cfg && cfg.enabled && (cfg.has_key || (cfg.model_name && isLocalAiUrl(cfg.provider, cfg.base_url)));
+    if (ready) {
       dot.classList.add('online');
       txt.textContent = '真AI已启用';
     } else {
@@ -1964,21 +1972,173 @@ window.App = (function () {
     }
   }
 
+  function loadCustomPresetsFromCfg(cfg) {
+    let list = Array.isArray(cfg && cfg.custom_presets) ? cfg.custom_presets : [];
+    if (!list.length) {
+      try {
+        const raw = localStorage.getItem(CUSTOM_PRESETS_LS_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) list = parsed;
+        }
+      } catch (_) {}
+    } else {
+      try {
+        localStorage.setItem(CUSTOM_PRESETS_LS_KEY, JSON.stringify(list));
+      } catch (_) {}
+    }
+    state.customAiPresets = list;
+  }
+
+  function renderCustomAiPresets() {
+    const row = document.getElementById('aiSavedPresetsRow');
+    if (!row) return;
+    const list = state.customAiPresets || [];
+    if (!list.length) {
+      row.innerHTML = `<span style="font-size:11.5px; color:var(--text-muted);">暂无收藏，填好接口/模型后点右侧「➕ 收藏当前配置」即可快速切换多套模型</span>`;
+      return;
+    }
+    row.innerHTML = list
+      .map(
+        (p, idx) => `
+        <span class="chip" style="display:inline-flex; align-items:center; gap:6px; padding-right:8px;" onclick="App.applyCustomAiPreset(${idx})" title="${escHtml(p.model_name || '')} · ${escHtml(p.base_url || '')}">
+          <span>⭐ ${escHtml(p.name || p.model_name || '自定义模型')}</span>
+          <span style="font-size:13px; font-weight:800; color:var(--text-muted); padding:0 2px;" onclick="event.stopPropagation(); App.deleteCustomAiPreset(${idx})" title="删除此收藏">×</span>
+        </span>`
+      )
+      .join('');
+  }
+
+  async function saveCustomAiPreset() {
+    const provider = document.getElementById('aiCfgProvider').value;
+    const baseUrl = document.getElementById('aiCfgBaseUrl').value.trim();
+    const modelName = document.getElementById('aiCfgModel').value.trim();
+    const apiKey = document.getElementById('aiCfgApiKey').value.trim();
+    const supportsVision = document.getElementById('aiCfgVision').checked ? 1 : 0;
+    const nameInput = document.getElementById('aiCustomPresetName');
+    const customName = (nameInput.value || '').trim() || modelName || '我的自定义模型';
+
+    if (!baseUrl || !modelName) {
+      showToast('请先填写接口地址 Base URL 和模型名称再收藏');
+      return;
+    }
+    const nextList = [...(state.customAiPresets || [])];
+    const item = {
+      name: customName.slice(0, 24),
+      provider,
+      base_url: baseUrl,
+      model_name: modelName,
+      supports_vision: supportsVision,
+      api_key: apiKey,
+    };
+    const dupIdx = nextList.findIndex((x) => x.name === item.name);
+    if (dupIdx >= 0) nextList[dupIdx] = item;
+    else nextList.push(item);
+
+    state.customAiPresets = nextList;
+    try {
+      localStorage.setItem(CUSTOM_PRESETS_LS_KEY, JSON.stringify(nextList));
+    } catch (_) {}
+    renderCustomAiPresets();
+    nameInput.value = '';
+    try {
+      const saved = await api('/api/ai/settings', { method: 'POST', body: { custom_presets: nextList } });
+      state.aiSettings = saved;
+    } catch (_) {}
+    showToast(`✅ 已收藏自定义模型「${item.name}」`);
+  }
+
+  function applyCustomAiPreset(idx) {
+    const p = (state.customAiPresets || [])[idx];
+    if (!p) return;
+    const provSel = document.getElementById('aiCfgProvider');
+    const provVal = p.provider && provSel.querySelector(`option[value="${p.provider}"]`) ? p.provider : 'custom';
+    provSel.value = provVal;
+    renderProviderMeta(provVal, false);
+    document.getElementById('aiCfgBaseUrl').value = p.base_url || '';
+    document.getElementById('aiCfgModel').value = p.model_name || '';
+    document.getElementById('aiCfgVision').checked = p.supports_vision !== 0;
+    if (p.api_key) {
+      document.getElementById('aiCfgApiKey').value = p.api_key;
+      document.getElementById('aiSavedKeyHint').textContent = '已填入收藏密钥（点保存生效）';
+    }
+    showToast(`已切换至「${p.name}」，点击下方保存即可启用`);
+  }
+
+  async function deleteCustomAiPreset(idx) {
+    const nextList = (state.customAiPresets || []).filter((_, i) => i !== idx);
+    state.customAiPresets = nextList;
+    try {
+      localStorage.setItem(CUSTOM_PRESETS_LS_KEY, JSON.stringify(nextList));
+    } catch (_) {}
+    renderCustomAiPresets();
+    try {
+      const saved = await api('/api/ai/settings', { method: 'POST', body: { custom_presets: nextList } });
+      state.aiSettings = saved;
+    } catch (_) {}
+    showToast('已删除该模型收藏');
+  }
+
+  async function fetchAvailableModels() {
+    const btn = document.getElementById('btnFetchAiModels');
+    const orig = btn.textContent;
+    const baseUrl = document.getElementById('aiCfgBaseUrl').value.trim();
+    if (!baseUrl) {
+      showToast('请先填写接口地址 Base URL');
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = '拉取中...';
+    try {
+      const res = await api('/api/ai/models', {
+        method: 'POST',
+        body: {
+          provider: document.getElementById('aiCfgProvider').value,
+          base_url: baseUrl,
+          api_key: document.getElementById('aiCfgApiKey').value.trim(),
+        },
+      });
+      const models = res.models || [];
+      const chipsBox = document.getElementById('aiModelQuickChips');
+      if (!models.length) {
+        showToast('接口未返回模型列表，可直接手动输入模型名');
+        return;
+      }
+      chipsBox.innerHTML = models
+        .map((m) => `<span class="chip" onclick="App.selectQuickModel('${escHtml(m)}')">${escHtml(m)}</span>`)
+        .join('');
+      if (!document.getElementById('aiCfgModel').value.trim()) {
+        document.getElementById('aiCfgModel').value = models[0];
+      }
+      showToast(`✅ 成功拉取 ${models.length} 个可用模型，点击标签即可选用`);
+    } catch (e) {
+      showToast(`${e.message}（也可直接手动输入模型名）`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  }
+
   async function openAiModal() {
     try {
       const cfg = await api('/api/ai/settings');
       state.aiSettings = cfg;
+      loadCustomPresetsFromCfg(cfg);
       document.getElementById('aiCfgEnabled').checked = Boolean(cfg.enabled);
-      document.getElementById('aiCfgProvider').value = cfg.provider || 'zhipu';
+      const provSel = document.getElementById('aiCfgProvider');
+      const targetProv = cfg.provider && provSel.querySelector(`option[value="${cfg.provider}"]`) ? cfg.provider : 'custom';
+      provSel.value = targetProv;
       document.getElementById('aiCfgBaseUrl').value = cfg.base_url || '';
       document.getElementById('aiCfgModel').value = cfg.model_name || '';
+      document.getElementById('aiCfgVision').checked = cfg.supports_vision !== 0;
       document.getElementById('aiCfgApiKey').value = '';
       document.getElementById('aiCfgFallback').checked = Boolean(cfg.auto_fallback);
       document.getElementById('aiSavedKeyHint').textContent = cfg.has_key
         ? `✅ 已保存密钥 (${cfg.masked_key})`
         : '尚未填写 API Key';
       document.getElementById('aiTestResultBox').style.display = 'none';
-      renderProviderMeta(cfg.provider || 'zhipu', false);
+      renderProviderMeta(targetProv, false);
+      renderCustomAiPresets();
       document.getElementById('aiConfigModal').classList.add('open');
     } catch (e) {
       showToast(e.message);
@@ -1991,17 +2151,28 @@ window.App = (function () {
 
   function renderProviderMeta(providerKey, overwriteFields = true) {
     const providers = (state.aiSettings && state.aiSettings.providers) || {};
-    const meta = providers[providerKey];
+    const meta = providers[providerKey] || providers.custom;
     if (!meta) return;
-    document.getElementById('aiProviderGuide').innerHTML = `<strong>💡 平台说明：</strong>${meta.guide}`;
+    document.getElementById('aiProviderGuide').innerHTML = `<strong>💡 平台说明：</strong>${escHtml(meta.guide)}`;
     if (overwriteFields) {
-      document.getElementById('aiCfgBaseUrl').value = meta.base_url;
-      document.getElementById('aiCfgModel').value = meta.default_model;
+      if (providerKey === 'custom') {
+        const curUrl = document.getElementById('aiCfgBaseUrl').value.trim();
+        if (!curUrl) document.getElementById('aiCfgBaseUrl').placeholder = 'https://你的接口域名/v1';
+      } else {
+        document.getElementById('aiCfgBaseUrl').value = meta.base_url || '';
+        document.getElementById('aiCfgModel').value = meta.default_model || '';
+      }
+      document.getElementById('aiCfgVision').checked = meta.vision !== false;
     }
     const chipsBox = document.getElementById('aiModelQuickChips');
-    chipsBox.innerHTML = (meta.models || [])
-      .map((m) => `<span class="chip" onclick="App.selectQuickModel('${m}')">${m}</span>`)
-      .join('');
+    const models = meta.models || [];
+    if (models.length) {
+      chipsBox.innerHTML = models
+        .map((m) => `<span class="chip" onclick="App.selectQuickModel('${escHtml(m)}')">${escHtml(m)}</span>`)
+        .join('');
+    } else {
+      chipsBox.innerHTML = `<span style="font-size:11.5px; color:var(--text-muted);">请直接在上方输入自定义模型名称，或填好 Base URL 与 Key 后点「🔍 拉取模型」</span>`;
+    }
   }
 
   function onAiProviderChange(prov) {
@@ -2015,6 +2186,12 @@ window.App = (function () {
   async function testAiConnection() {
     const btn = document.getElementById('btnTestAiConn');
     const resBox = document.getElementById('aiTestResultBox');
+    const baseUrl = document.getElementById('aiCfgBaseUrl').value.trim();
+    const modelName = document.getElementById('aiCfgModel').value.trim();
+    if (!baseUrl || !modelName) {
+      showToast('请先填写接口地址 Base URL 和模型名称');
+      return;
+    }
     btn.disabled = true;
     btn.textContent = '连接测试中...';
     resBox.style.display = 'block';
@@ -2027,9 +2204,10 @@ window.App = (function () {
         method: 'POST',
         body: {
           provider: document.getElementById('aiCfgProvider').value,
-          base_url: document.getElementById('aiCfgBaseUrl').value.trim(),
-          model_name: document.getElementById('aiCfgModel').value.trim(),
+          base_url: baseUrl,
+          model_name: modelName,
           api_key: document.getElementById('aiCfgApiKey').value.trim(),
+          supports_vision: document.getElementById('aiCfgVision').checked ? 1 : 0,
         },
       });
       resBox.style.background = '#ECFDF5';
@@ -2046,20 +2224,30 @@ window.App = (function () {
   }
 
   async function saveAiConfig() {
+    const provider = document.getElementById('aiCfgProvider').value;
+    const baseUrl = document.getElementById('aiCfgBaseUrl').value.trim();
+    const modelName = document.getElementById('aiCfgModel').value.trim();
+    if (!baseUrl || !modelName) {
+      showToast('请先填写接口地址 Base URL 和模型名称');
+      return;
+    }
     const payload = {
       enabled: document.getElementById('aiCfgEnabled').checked ? 1 : 0,
-      provider: document.getElementById('aiCfgProvider').value,
-      base_url: document.getElementById('aiCfgBaseUrl').value.trim(),
-      model_name: document.getElementById('aiCfgModel').value.trim(),
+      provider,
+      base_url: baseUrl,
+      model_name: modelName,
       api_key: document.getElementById('aiCfgApiKey').value.trim(),
+      supports_vision: document.getElementById('aiCfgVision').checked ? 1 : 0,
       auto_fallback: document.getElementById('aiCfgFallback').checked ? 1 : 0,
+      custom_presets: state.customAiPresets || [],
     };
     try {
       const saved = await api('/api/ai/settings', { method: 'POST', body: payload });
       state.aiSettings = saved;
       updateHeaderAiBadge();
       closeAiModal();
-      showToast(saved.has_key && saved.enabled ? `已启用真实多模态AI (${saved.model_name})` : 'AI 配置已保存');
+      const ready = saved.enabled && (saved.has_key || (saved.model_name && isLocalAiUrl(saved.provider, saved.base_url)));
+      showToast(ready ? `已启用真AI (${saved.model_name})` : 'AI 配置已保存');
     } catch (e) {
       showToast(e.message);
     }
@@ -2261,6 +2449,10 @@ window.App = (function () {
     saveAiConfig,
     toggleApiKeyVisibility,
     clearSavedApiKey,
+    saveCustomAiPreset,
+    applyCustomAiPreset,
+    deleteCustomAiPreset,
+    fetchAvailableModels,
     openOnboardingWizard,
     goOnboardStep,
     selectOnboardGender,
