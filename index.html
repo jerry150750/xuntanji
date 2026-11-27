@@ -9,7 +9,7 @@
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
-  <link rel="stylesheet" href="./styles.css?v=9" />
+  <link rel="stylesheet" href="./styles.css?v=10" />
 </head>
 <body>
   <!-- ==================== 进入 APP 前的原生启动屏 & 沉浸式分步引导界面 ==================== -->
@@ -599,7 +599,7 @@
 
         <div class="diet-ai-actions">
           <button type="button" class="btn btn-primary" id="btnRunFoodText" onclick="App.runTextFoodAI()">✨ AI 估算文字营养</button>
-          <button type="button" class="btn btn-dark" id="btnUploadMealPhoto" onclick="App.triggerPhotoUpload('meal')">📷 拍照/选图真AI识餐</button>
+          <button type="button" class="btn btn-dark" id="btnUploadMealPhoto" onclick="App.triggerPhotoUpload('meal')">📷 拍照/选图识餐</button>
         </div>
 
         <!-- 餐盘照片缩略图预览 -->
@@ -993,7 +993,7 @@
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">应用版本与在线热更新</h3>
-          <span class="card-sub" id="appVersionBadge">v1.5.4</span>
+          <span class="card-sub" id="appVersionBadge">v1.5.5</span>
         </div>
         <div style="font-size:12px; color:var(--text-sub); line-height:1.6; margin-bottom:10px;">
           所有身体照片、体脂记录与打卡数据保存在本地大容量数据库（IndexedDB），应用内更新不会丢失任何历史数据。
@@ -1045,6 +1045,7 @@
       <div class="form-group">
         <label class="form-label">选择 AI 服务平台预设</label>
         <select id="aiCfgProvider" class="input" onchange="App.onAiProviderChange(this.value)">
+          <option value="custom">🛠️ 自定义接口 / 任意兼容模型 (中转站·私有部署)</option>
           <option value="deepseek">DeepSeek 深度求索 (deepseek-chat / R1 官方接口)</option>
           <option value="zhipu">智谱清言 GLM-4V（推荐·glm-4v-flash 免费视觉模型）</option>
           <option value="qwen">阿里云百炼 · 通义千问视觉 Qwen-VL</option>
@@ -1052,6 +1053,10 @@
           <option value="doubao">火山方舟 · 豆包视觉 Doubao-Vision</option>
           <option value="gemini">Google Gemini Vision (gemini-2.5-flash)</option>
           <option value="openai">OpenAI / 通用兼容接口 (GPT-4o / 中转站)</option>
+          <option value="openrouter">OpenRouter 聚合平台 (Claude / GPT / Gemini / Qwen)</option>
+          <option value="moonshot">月之暗面 Kimi (Moonshot Vision)</option>
+          <option value="stepfun">阶跃星辰 StepFun 视觉</option>
+          <option value="ollama">Ollama / 本地大模型 (免 API Key)</option>
         </select>
       </div>
 
@@ -1059,14 +1064,24 @@
 
       <div class="form-group">
         <label class="form-label">接口地址 Base URL（支持自定义修改）</label>
-        <input type="text" id="aiCfgBaseUrl" class="input" placeholder="https://open.bigmodel.cn/api/paas/v4" />
+        <input type="text" id="aiCfgBaseUrl" class="input" placeholder="https://api.openai.com/v1 或任意兼容接口" />
       </div>
 
       <div class="form-group">
-        <label class="form-label">视觉模型名称 Model</label>
-        <input type="text" id="aiCfgModel" class="input" placeholder="glm-4v-flash" />
+        <label class="form-label">
+          <span>模型名称 Model</span>
+          <span style="font-size:11px; color:var(--text-muted);">输入任意自定义模型名，或拉取/点下方切换</span>
+        </label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="aiCfgModel" class="input" placeholder="输入任意模型名，如 gpt-4o / claude-3-5-sonnet" />
+          <button class="btn btn-outline btn-sm" id="btnFetchAiModels" type="button" onclick="App.fetchAvailableModels()">🔍 拉取模型</button>
+        </div>
         <div id="aiModelQuickChips" class="chip-row" style="margin-top:6px;"></div>
       </div>
+
+      <label style="display:flex; align-items:center; gap:7px; font-size:12px; color:var(--text-main); margin-bottom:10px; font-weight:600;">
+        <input type="checkbox" id="aiCfgVision" checked /> 该模型支持直接看图（多模态视觉）；纯文本模型请取消勾选
+      </label>
 
       <div class="form-group">
         <label class="form-label">
@@ -1078,6 +1093,15 @@
           <button class="btn btn-outline btn-sm" type="button" onclick="App.toggleApiKeyVisibility()">显示</button>
           <button class="btn btn-outline btn-sm" type="button" onclick="App.clearSavedApiKey()">清空Key</button>
         </div>
+      </div>
+
+      <div style="background:#F8FAFC; border:1px solid var(--border-light); border-radius:12px; padding:10px; margin-bottom:10px;">
+        <div style="font-size:12px; font-weight:800; color:var(--text-main); margin-bottom:6px;">⭐ 我的自定义模型收藏（可存多套一键切换）</div>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="aiCustomPresetName" class="input" style="padding:7px 10px; font-size:12.5px;" placeholder="给当前配置起个备注名，如：我的GPT-4o中转" />
+          <button class="btn btn-outline btn-sm" type="button" onclick="App.saveCustomAiPreset()">➕ 收藏当前配置</button>
+        </div>
+        <div id="aiSavedPresetsRow" class="chip-row" style="margin-top:8px;"></div>
       </div>
 
       <label style="display:flex; align-items:center; gap:7px; font-size:12px; color:var(--text-sub); margin-bottom:12px;">
@@ -1130,8 +1154,8 @@
 
   <div id="toast" class="toast">已保存</div>
 
-  <script src="./offline_engine.js?v=9"></script>
-  <script src="./charts.js?v=9"></script>
-  <script src="./app.js?v=9"></script>
+  <script src="./offline_engine.js?v=10"></script>
+  <script src="./charts.js?v=10"></script>
+  <script src="./app.js?v=10"></script>
 </body>
 </html>
