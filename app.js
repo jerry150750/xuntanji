@@ -3,7 +3,7 @@
    连接 Python SQLite 持久化 API，并在本地维护 LocalStorage 镜像备份。
    ========================================================================== */
 window.App = (function () {
-  const APP_VERSION = '1.5.3';
+  const APP_VERSION = '1.5.5';
 
   const ACTIVITY_MULTIPLIERS = {
     sedentary: 1.2,
@@ -76,6 +76,15 @@ window.App = (function () {
     const dt = new Date(parts[0], parts[1] - 1, parts[2]);
     const jsDay = dt.getDay(); // 0=Sun..6=Sat
     return jsDay === 0 ? 6 : jsDay - 1; // 0=Mon..6=Sun
+  }
+
+  function escHtml(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function showToast(msg) {
@@ -158,7 +167,7 @@ window.App = (function () {
     // 仅在标准 Web 浏览器/静态托管 App 壳注册 Service Worker，支持应用内热更新与离线缓存
     const isNativeLocalShell = Boolean(window.plus || window.cordova);
     if (!isNativeLocalShell && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-      navigator.serviceWorker.register('./sw.js?v=8').then((reg) => {
+      navigator.serviceWorker.register('./sw.js?v=9').then((reg) => {
         reg.update().catch(() => {});
         reg.addEventListener('updatefound', () => {
           const nw = reg.installing;
@@ -655,13 +664,13 @@ window.App = (function () {
       if (!rec) return;
       state.lastRecItems = rec.items || [];
       const itemsHtml = state.lastRecItems
-        .map((it) => `${it.food_name} <strong>${it.grams}g</strong>`)
+        .map((it) => `${escHtml(it.food_name)} <strong>${it.grams}g</strong>`)
         .join(' + ');
       const totalKcal = state.lastRecItems.reduce((s, i) => s + i.calories, 0).toFixed(0);
       box.innerHTML = `
         <div style="background:#F7FAF9; border:1px solid #D1FAE5; border-radius:12px; padding:12px;">
-          <div style="font-weight:800; font-size:13.5px; color:#065F46;">🍽️ ${rec.title}（约 ${totalKcal} kcal）</div>
-          <div style="font-size:12px; color:var(--text-sub); margin-top:4px;">${rec.desc}</div>
+          <div style="font-weight:800; font-size:13.5px; color:#065F46;">🍽️ ${escHtml(rec.title)}（约 ${totalKcal} kcal）</div>
+          <div style="font-size:12px; color:var(--text-sub); margin-top:4px;">${escHtml(rec.desc)}</div>
           <div style="font-size:12.5px; margin-top:8px; color:var(--text-main);">推荐组合：${itemsHtml}</div>
           <button type="button" class="btn btn-primary btn-sm" style="margin-top:9px;" onclick="App.quickLogRecommended()">一键记入今日饮食</button>
         </div>
@@ -1159,7 +1168,7 @@ window.App = (function () {
         (it, idx) => `
         <div class="food-item" style="padding:7px 0;">
           <div>
-            <div class="food-title">${it.food_name}</div>
+            <div class="food-title">${escHtml(it.food_name)}</div>
             <div class="food-meta">${it.calories.toFixed(0)} kcal · 碳${it.carbs_g.toFixed(1)}g 蛋${it.protein_g.toFixed(1)}g 脂${it.fat_g.toFixed(1)}g</div>
           </div>
           <div style="display:flex; align-items:center; gap:5px;">
@@ -1372,7 +1381,7 @@ window.App = (function () {
         (item) => `
         <div class="food-item">
           <div>
-            <div class="food-title"><span style="font-size:11.5px; color:var(--keep-green-dark); margin-right:5px;">${MEAL_LABELS[item.meal_type] || '餐食'}</span>${item.food_name} (${item.grams}g)</div>
+            <div class="food-title"><span style="font-size:11.5px; color:var(--keep-green-dark); margin-right:5px;">${MEAL_LABELS[item.meal_type] || '餐食'}</span>${escHtml(item.food_name)} (${item.grams}g)</div>
             <div class="food-meta">${item.calories} kcal · 碳水 ${item.carbs_g}g · 蛋白质 ${item.protein_g}g · 脂肪 ${item.fat_g}g</div>
           </div>
           <button class="btn btn-outline btn-sm" style="color:var(--danger-red);" onclick="App.removeFoodLog(${item.id})">删除</button>
@@ -1482,8 +1491,8 @@ window.App = (function () {
         (c) => `
         <div class="food-item" style="cursor:pointer;" onclick="App.editHistoryCheckin('${c.date}')">
           <div>
-            <div class="food-title">${c.date} · 体重 <strong>${c.weight_kg ?? '--'}kg</strong> ${c.waist_cm ? `· 腰围 ${c.waist_cm}cm` : ''} ${c.body_fat_pct ? `· 体脂 ${c.body_fat_pct}%` : ''}</div>
-            <div class="food-meta">${WORKOUT_LABELS[c.workout_done] || c.workout_done} · 表现${c.workout_performance}分 · 饥饿${c.hunger_level}级 · ${c.body_state || ''} ${c.notes ? '｜' + c.notes : ''}</div>
+            <div class="food-title">${escHtml(c.date)} · 体重 <strong>${c.weight_kg ?? '--'}kg</strong> ${c.waist_cm ? `· 腰围 ${c.waist_cm}cm` : ''} ${c.body_fat_pct ? `· 体脂 ${c.body_fat_pct}%` : ''}</div>
+            <div class="food-meta">${WORKOUT_LABELS[c.workout_done] || escHtml(c.workout_done)} · 表现${c.workout_performance}分 · 饥饿${c.hunger_level}级 · ${escHtml(c.body_state || '')} ${c.notes ? '｜' + escHtml(c.notes) : ''}</div>
           </div>
           <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); App.removeCheckin('${c.date}')">删除</button>
         </div>`
@@ -1521,8 +1530,10 @@ window.App = (function () {
       const res = await api('/api/demo/seed', { method: 'POST', body: { days: 14, date: state.todayStr } });
       state.checkins = res.checkins;
       state.todayFoods = res.today_foods;
-      state.dietFoods = res.today_foods;
       state.analytics = res.analytics;
+      const dietDate = document.getElementById('dietDateInput').value || state.todayStr;
+      if (dietDate === state.todayStr) state.dietFoods = res.today_foods;
+      else await loadDietForDate(dietDate);
       loadCheckinForDate(state.todayStr);
       renderAll();
       showToast('已生成近14天碳循环打卡与饮食趋势样本！');
@@ -1536,8 +1547,10 @@ window.App = (function () {
       const res = await api('/api/demo/clear', { method: 'POST', body: { only_demo: true, date: state.todayStr } });
       state.checkins = res.checkins;
       state.todayFoods = res.today_foods;
-      state.dietFoods = res.today_foods;
       state.analytics = res.analytics;
+      const dietDate = document.getElementById('dietDateInput').value || state.todayStr;
+      if (dietDate === state.todayStr) state.dietFoods = res.today_foods;
+      else await loadDietForDate(dietDate);
       loadCheckinForDate(state.todayStr);
       renderAll();
       showToast('已清空样本数据（您的真实打卡与饮食已保留）');
@@ -1915,14 +1928,14 @@ window.App = (function () {
 
     const vb = a.visual_breakdown || {};
     const fallbackHtml = a.fallback_reason
-      ? `<div style="color:#B45309; margin-bottom:4px;">⚠️ 真实接口异常已自动兜底：${a.fallback_reason}</div>`
+      ? `<div style="color:#B45309; margin-bottom:4px;">⚠️ 真实接口异常已自动兜底：${escHtml(a.fallback_reason)}</div>`
       : '';
     document.getElementById('aiBfBreakdown').innerHTML = `
       ${fallbackHtml}
-      <div>• <strong>评估置信度</strong>：${a.confidence_label || '--'}</div>
-      <div>• <strong>正面分析</strong>：${vb.front || ''}</div>
-      <div>• <strong>侧面分析</strong>：${vb.side || ''}</div>
-      <div>• <strong>背面分析</strong>：${vb.back || ''}</div>
+      <div>• <strong>评估置信度</strong>：${escHtml(a.confidence_label || '--')}</div>
+      <div>• <strong>正面分析</strong>：${escHtml(vb.front || '')}</div>
+      <div>• <strong>侧面分析</strong>：${escHtml(vb.side || '')}</div>
+      <div>• <strong>背面分析</strong>：${escHtml(vb.back || '')}</div>
     `;
 
     const adviceEl = document.getElementById('aiBfAdviceBox');
@@ -2021,7 +2034,7 @@ window.App = (function () {
       });
       resBox.style.background = '#ECFDF5';
       resBox.style.color = '#065F46';
-      resBox.innerHTML = `✅ <strong>连接成功！</strong> 耗时 ${res.latency_ms}ms · 模型 <code>${res.model_name}</code><br/>回复预览：${res.raw_reply}`;
+      resBox.innerHTML = `✅ <strong>连接成功！</strong> 耗时 ${res.latency_ms}ms · 模型 <code>${escHtml(res.model_name)}</code><br/>回复预览：${escHtml(res.raw_reply)}`;
     } catch (e) {
       resBox.style.background = '#FEF2F2';
       resBox.style.color = '#991B1B';
