@@ -15,11 +15,25 @@ window.CarbCharts = (function () {
     return { ctx, width, height };
   }
 
+  function drawRoundRectPath(ctx, x, y, w, h, r) {
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(x, y, w, h, r);
+      return;
+    }
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
   function drawEmpty(ctx, width, height, text) {
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = '#F8FAFD';
     ctx.beginPath();
-    ctx.roundRect(0, 0, width, height, 12);
+    drawRoundRectPath(ctx, 0, 0, width, height, 12);
     ctx.fill();
     ctx.fillStyle = '#949CB0';
     ctx.font = '12.5px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
@@ -239,7 +253,7 @@ window.CarbCharts = (function () {
 
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.roundRect(cx - barW / 2, top, barW, h, 5);
+      drawRoundRectPath(ctx, cx - barW / 2, top, barW, h, 5);
       ctx.fill();
 
       if (labels.length <= 10) {
