@@ -71,6 +71,46 @@ window.OfflineEngine = (function () {
       vision: true,
       guide: '支持官方 OpenAI 或任意兼容 /v1/chat/completions 的第三方聚合中转 API。',
     },
+    openrouter: {
+      name: 'OpenRouter 聚合平台 (Claude / GPT / Gemini / Qwen)',
+      base_url: 'https://openrouter.ai/api/v1',
+      default_model: 'google/gemini-2.5-flash',
+      models: ['google/gemini-2.5-flash', 'openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet', 'qwen/qwen2.5-vl-72b-instruct'],
+      vision: true,
+      guide: '前往 openrouter.ai 获取 API Key，一个密钥即可切换全球数百款开源与闭源模型。',
+    },
+    moonshot: {
+      name: '月之暗面 Kimi (Moonshot Vision)',
+      base_url: 'https://api.moonshot.cn/v1',
+      default_model: 'moonshot-v1-8k-vision-preview',
+      models: ['moonshot-v1-8k-vision-preview', 'moonshot-v1-32k-vision-preview', 'kimi-latest'],
+      vision: true,
+      guide: '前往 platform.moonshot.cn 获取 API Key，支持长上下文与图片识餐。',
+    },
+    stepfun: {
+      name: '阶跃星辰 StepFun 视觉',
+      base_url: 'https://api.stepfun.com/v1',
+      default_model: 'step-1v-8k',
+      models: ['step-1v-8k', 'step-1o-vision-32k'],
+      vision: true,
+      guide: '前往 platform.stepfun.com 获取 API Key，中文食谱理解能力优秀。',
+    },
+    ollama: {
+      name: 'Ollama / 本地大模型 (免 API Key)',
+      base_url: 'http://127.0.0.1:11434/v1',
+      default_model: 'qwen2.5vl:7b',
+      models: ['qwen2.5vl:7b', 'llava:latest', 'llama3.2-vision', 'deepseek-r1:8b'],
+      vision: true,
+      guide: '连接本机或局域网运行的 Ollama / LM Studio 服务，无需 API Key，模型名填本地已拉取的模型即可。',
+    },
+    custom: {
+      name: '🛠️ 自定义接口（任意 OpenAI / 中转站 / 私有部署）',
+      base_url: '',
+      default_model: '',
+      models: [],
+      vision: true,
+      guide: '填入任意兼容 /v1/chat/completions 的接口地址（如 OneAPI / NewAPI / 第三方中转站 / 私有模型）与自定义模型名称即可使用；若为纯文本模型请取消勾选「支持直接看图」。',
+    },
   };
 
   const FOOD_DB = [
@@ -196,6 +236,8 @@ window.OfflineEngine = (function () {
         api_key: '',
         model_name: 'deepseek-chat',
         auto_fallback: 1,
+        supports_vision: 0,
+        custom_presets: [],
       },
     };
   }
@@ -485,25 +527,63 @@ window.OfflineEngine = (function () {
     throw new Error('模型返回格式异常');
   }
 
+  function isLocalEndpoint(prov, baseUrl) {
+    const u = String(baseUrl || '').toLowerCase();
+    return prov === 'ollama' || u.includes('127.0.0.1') || u.includes('localhost') || u.includes('192.168.');
+  }
+
+  async function fetchRemoteModels(cfg) {
+    const prov = cfg.provider || 'custom';
+    const apiKey = String(cfg.api_key || '').trim();
+    const meta = PROVIDERS[prov] || PROVIDERS.custom;
+    const baseUrl = String(cfg.base_url || meta.base_url).trim().replace(/\/+$/, '');
+    if (!baseUrl) throw new Error('请先填写接口地址 Base URL');
+    if (!apiKey && !isLocalEndpoint(prov, baseUrl)) throw new Error('请先填写 API Key 再拉取模型列表');
+
+    const isGeminiNative = prov === 'gemini' && baseUrl.includes('generativelanguage.googleapis.com') && !baseUrl.includes('/openai');
+    const apiRoot = baseUrl.endsWith('/chat/completions') ? baseUrl.slice(0, -'/chat/completions'.length) : baseUrl;
+    const endpoint = isGeminiNative
+      ? `${baseUrl}/models?key=${encodeURIComponent(apiKey)}`
+      : `${apiRoot}/models`;
+    const headers = isGeminiNative ? {} : { Authorization: `Bearer ${apiKey || 'ollama'}` };
+
+    const resp = await fetch(endpoint, { method: 'GET', headers });
+    if (!resp.ok) throw new Error(`拉取模型列表失败 (HTTP ${resp.status})`);
+    const data = await resp.json();
+    const list = isGeminiNative
+      ? (data.models || []).map((m) => String(m.name || '').replace(/^models\//, '')).filter(Boolean)
+      : (data.data || []).map((m) => String(m.id || '')).filter(Boolean);
+    return Array.from(new Set(list)).sort().slice(0, 60);
+  }
+
   async function callCloudLLM(cfg, sysPrompt, userPrompt, imagesDataUrls = [], maxTokens = 1000) {
     const apiKey = String(cfg.api_key || '').trim();
-    if (!apiKey) throw new Error('尚未填写 API Key');
     const prov = cfg.provider || 'deepseek';
-    const meta = PROVIDERS[prov] || PROVIDERS.openai;
+    const meta = PROVIDERS[prov] || PROVIDERS.custom;
     const baseUrl = String(cfg.base_url || meta.base_url).trim().replace(/\/+$/, '');
     const model = String(cfg.model_name || meta.default_model).trim();
+    if (!baseUrl || !model) throw new Error('请先填写接口地址 Base URL 与模型名称');
+    if (!apiKey && !isLocalEndpoint(prov, baseUrl)) throw new Error('尚未填写 API Key');
     const t0 = Date.now();
 
     const isGeminiNative = prov === 'gemini' && baseUrl.includes('generativelanguage.googleapis.com') && !baseUrl.includes('/openai');
+    const mLow = model.toLowerCase();
+    const explicitVision = cfg.supports_vision;
+    const canVision =
+      explicitVision === 0 || explicitVision === false
+        ? false
+        : Boolean(meta.vision) && !(mLow === 'deepseek-chat' || mLow === 'deepseek-reasoner' || mLow.includes('deepseek-v3') || mLow.includes('deepseek-r1'));
 
     if (isGeminiNative) {
       const endpoint = `${baseUrl}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const parts = [{ text: `${sysPrompt}\n\n${userPrompt}` }];
-      (imagesDataUrls || []).filter(Boolean).forEach((dUrl) => {
-        const [hdr, b64] = dUrl.split(',');
-        const mime = (hdr.match(/data:([^;]+);/) || [])[1] || 'image/jpeg';
-        parts.push({ inline_data: { mime_type: mime, data: b64 } });
-      });
+      if (canVision) {
+        (imagesDataUrls || []).filter(Boolean).forEach((dUrl) => {
+          const [hdr, b64] = dUrl.split(',');
+          const mime = (hdr.match(/data:([^;]+);/) || [])[1] || 'image/jpeg';
+          parts.push({ inline_data: { mime_type: mime, data: b64 } });
+        });
+      }
       const resp = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -516,8 +596,6 @@ window.OfflineEngine = (function () {
     }
 
     const endpoint = baseUrl.endsWith('/chat/completions') ? baseUrl : `${baseUrl}/chat/completions`;
-    const mLow = model.toLowerCase();
-    const canVision = Boolean(meta.vision) && !(mLow === 'deepseek-chat' || mLow === 'deepseek-reasoner' || mLow.includes('deepseek-v3') || mLow.includes('deepseek-r1'));
     const validImgs = (imagesDataUrls || []).filter(Boolean);
 
     let messages;
@@ -538,7 +616,7 @@ window.OfflineEngine = (function () {
 
     const resp = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey || 'ollama'}` },
       body: JSON.stringify(payload),
     });
     if (!resp.ok) {
@@ -967,7 +1045,10 @@ window.OfflineEngine = (function () {
     // APP 端真实多模态饮食识别 + 自动离线兜底
     if (method === 'POST' && pathname === '/api/ai/food-estimate') {
       const cfg = db.ai_settings;
-      const useCloud = Boolean(cfg.enabled) && Boolean(String(cfg.api_key || '').trim());
+      const useCloud =
+        Boolean(cfg.enabled) &&
+        Boolean(String(cfg.model_name || '').trim()) &&
+        (Boolean(String(cfg.api_key || '').trim()) || isLocalEndpoint(cfg.provider, cfg.base_url));
       const mode = body.mode || 'text';
       const txt = String(body.text || body.hint || '').trim();
       const dayLbl = body.day_type_label || '碳循环减脂日';
@@ -1045,7 +1126,10 @@ window.OfflineEngine = (function () {
       });
 
       const cfg = db.ai_settings;
-      const useCloud = Boolean(cfg.enabled) && Boolean(String(cfg.api_key || '').trim());
+      const useCloud =
+        Boolean(cfg.enabled) &&
+        Boolean(String(cfg.model_name || '').trim()) &&
+        (Boolean(String(cfg.api_key || '').trim()) || isLocalEndpoint(cfg.provider, cfg.base_url));
       let result;
 
       if (useCloud) {
@@ -1115,6 +1199,16 @@ window.OfflineEngine = (function () {
         40
       );
       return { ok: true, latency_ms, model_name: model, raw_reply: reply.slice(0, 120) };
+    }
+
+    if (method === 'POST' && pathname === '/api/ai/models') {
+      const testCfg = {
+        ...db.ai_settings,
+        ...body,
+        api_key: String(body.api_key || '').trim() || db.ai_settings.api_key,
+      };
+      const models = await fetchRemoteModels(testCfg);
+      return { models };
     }
 
     return {};
