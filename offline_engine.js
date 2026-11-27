@@ -131,6 +131,17 @@ window.OfflineEngine = (function () {
 
   const CN_NUM = { 半: 0.5, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
 
+  function localDateStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function toOptNum(v) {
+    if (v === '' || v === null || v === undefined) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
   function round2(n) {
     return Math.round(Number(n || 0) * 100) / 100;
   }
@@ -707,7 +718,7 @@ window.OfflineEngine = (function () {
     const pathname = urlObj.pathname;
 
     if (method === 'GET' && pathname === '/api/bootstrap') {
-      const d = urlObj.searchParams.get('date') || new Date().toISOString().slice(0, 10);
+      const d = urlObj.searchParams.get('date') || localDateStr();
       const plan = calculatePlan(db.profile);
       return {
         profile: db.profile,
@@ -824,7 +835,7 @@ window.OfflineEngine = (function () {
         });
       });
       await persistDb();
-      const d = arr[0]?.date || new Date().toISOString().slice(0, 10);
+      const d = arr[0]?.date || localDateStr();
       const plan = calculatePlan(db.profile);
       return { today_foods: db.food_logs.filter((x) => x.date === d), analytics: buildAnalytics(db, plan) };
     }
@@ -838,17 +849,32 @@ window.OfflineEngine = (function () {
     }
 
     if (method === 'POST' && pathname === '/api/checkins') {
-      const idx = db.checkins.findIndex((c) => c.date === body.date);
-      if (idx >= 0) db.checkins[idx] = { ...db.checkins[idx], ...body };
-      else db.checkins.push(body);
-      if (body.sync_profile_weight && body.weight_kg) {
-        db.profile.weight_kg = Number(body.weight_kg);
-        if (body.waist_cm) db.profile.waist_cm = Number(body.waist_cm);
-        if (body.body_fat_pct) db.profile.current_bf = Number(body.body_fat_pct);
+      const cleanRow = {
+        date: String(body.date || localDateStr()),
+        weight_kg: toOptNum(body.weight_kg),
+        waist_cm: toOptNum(body.waist_cm),
+        hip_cm: toOptNum(body.hip_cm),
+        body_fat_pct: toOptNum(body.body_fat_pct),
+        sleep_hours: toOptNum(body.sleep_hours),
+        workout_done: body.workout_done || 'rest',
+        workout_performance: toOptNum(body.workout_performance),
+        hunger_level: toOptNum(body.hunger_level),
+        body_state: body.body_state || '',
+        notes: body.notes || '',
+        is_demo: 0,
+      };
+      const idx = db.checkins.findIndex((c) => c.date === cleanRow.date);
+      if (idx >= 0) db.checkins[idx] = { ...db.checkins[idx], ...cleanRow, is_demo: 0 };
+      else db.checkins.push(cleanRow);
+      db.checkins.sort((a, b) => a.date.localeCompare(b.date));
+      if (body.sync_profile_weight && cleanRow.weight_kg != null) {
+        db.profile.weight_kg = cleanRow.weight_kg;
+        if (cleanRow.waist_cm != null) db.profile.waist_cm = cleanRow.waist_cm;
+        if (cleanRow.body_fat_pct != null) db.profile.current_bf = cleanRow.body_fat_pct;
       }
       await persistDb();
       const plan = calculatePlan(db.profile);
-      return { checkin: body, checkins: db.checkins, profile: db.profile, plan, analytics: buildAnalytics(db, plan) };
+      return { checkin: cleanRow, checkins: db.checkins, profile: db.profile, plan, analytics: buildAnalytics(db, plan) };
     }
 
     if (method === 'DELETE' && pathname.startsWith('/api/checkins/')) {
@@ -883,10 +909,12 @@ window.OfflineEngine = (function () {
           hunger_level: 2,
           body_state: '精力充沛',
           notes: `${dp.label}打卡记录`,
+          is_demo: 1,
         };
         const ex = db.checkins.findIndex((c) => c.date === ds);
-        if (ex >= 0) db.checkins[ex] = row;
-        else db.checkins.push(row);
+        if (ex < 0) {
+          db.checkins.push(row);
+        }
 
         if (!db.food_logs.some((f) => f.date === ds)) {
           const fTot = dp.fat_is_cap ? 8.5 : dp.fat_g * 0.97;
@@ -900,20 +928,39 @@ window.OfflineEngine = (function () {
             protein_g: round2(dp.protein_g * 0.97),
             carbs_g: round2(dp.carbs_g * 0.97),
             fat_g: round2(fTot),
+            source: 'demo_seed',
           });
         }
       }
+      db.checkins.sort((a, b) => a.date.localeCompare(b.date));
       await persistDb();
-      const d = body.date || new Date().toISOString().slice(0, 10);
+      const d = body.date || localDateStr();
       return { checkins: db.checkins, today_foods: db.food_logs.filter((x) => x.date === d), analytics: buildAnalytics(db, plan) };
     }
 
     if (method === 'POST' && pathname === '/api/demo/clear') {
-      db.checkins = [];
-      db.food_logs = [];
+      if (body.only_demo) {
+        const isDemoCheckin = (c) =>
+          c.is_demo === 1 ||
+          c.is_demo === true ||
+          (c.is_demo == null && /^(高碳日|中碳日|低碳日)打卡记录$/.test(c.notes || ''));
+        const isDemoFood = (f) =>
+          f.source === 'demo_seed' ||
+          (f.source == null && /营养记录汇总$/.test(f.food_name || ''));
+        db.checkins = db.checkins.filter((c) => !isDemoCheckin(c));
+        db.food_logs = db.food_logs.filter((f) => !isDemoFood(f));
+      } else {
+        db.checkins = [];
+        db.food_logs = [];
+      }
       await persistDb();
+      const d = body.date || localDateStr();
       const plan = calculatePlan(db.profile);
-      return { checkins: [], today_foods: [], analytics: buildAnalytics(db, plan) };
+      return {
+        checkins: db.checkins,
+        today_foods: db.food_logs.filter((x) => x.date === d),
+        analytics: buildAnalytics(db, plan),
+      };
     }
 
     // APP 端真实多模态饮食识别 + 自动离线兜底
