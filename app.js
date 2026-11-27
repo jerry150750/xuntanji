@@ -3,7 +3,7 @@
    连接 Python SQLite 持久化 API，并在本地维护 LocalStorage 镜像备份。
    ========================================================================== */
 window.App = (function () {
-  const APP_VERSION = '1.5.2';
+  const APP_VERSION = '1.5.3';
 
   const ACTIVITY_MULTIPLIERS = {
     sedentary: 1.2,
@@ -50,6 +50,7 @@ window.App = (function () {
     lastRecItems: [],
     addingFoodItem: null,
     offlineMode: !['http:', 'https:'].includes(window.location.protocol),
+    backendConfirmed: false,
     onboardStep: 0,
     onboardGender: 'male',
     onboardActivity: 'light',
@@ -100,17 +101,30 @@ window.App = (function () {
     try {
       const resp = await fetch(path, opts);
       const contentType = resp.headers.get('content-type') || '';
-      // 如果在 Capacitor / HBuilderX / 静态托管 APK 内运行，/api/* 会返回 404 或 HTML 而非后端 JSON，立即自动接管到独立 App 引擎！
-      if ((resp.status === 404 || resp.status === 405 || !contentType.includes('application/json')) && window.OfflineEngine) {
+      const isJson = contentType.includes('application/json');
+      // 仅当响应非 JSON，或后端尚未确认存在时收到 404/405，才自动接管到独立离线引擎（防止合法业务 404 导致后端用户误切离线）
+      if ((!isJson || (!state.backendConfirmed && (resp.status === 404 || resp.status === 405))) && window.OfflineEngine) {
         state.offlineMode = true;
         return window.OfflineEngine.handleRequest(path, options);
       }
+      state.backendConfirmed = true;
       const data = await resp.json();
       if (!resp.ok) {
         throw new Error(data.error || `请求失败 (${resp.status})`);
       }
       return data;
     } catch (err) {
+      if (state.backendConfirmed) {
+        if (
+          err instanceof TypeError ||
+          String(err.message).includes('Failed to fetch') ||
+          String(err.message).includes('NetworkError') ||
+          String(err.message).includes('Load failed')
+        ) {
+          throw new Error('本地服务连接中断，请确认 app.py 仍在运行');
+        }
+        throw err;
+      }
       if (
         window.OfflineEngine &&
         (err instanceof TypeError ||
@@ -127,10 +141,24 @@ window.App = (function () {
   }
 
   async function init() {
+    // 申请持久化存储权限，降低 Android WebView 在存储空间紧张时清理 IndexedDB 的风险
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().catch(() => {});
+    }
+
+    // 清理热更新刷新后残留的 _r 查询参数
+    try {
+      const cleanUrl = new URL(window.location.href);
+      if (cleanUrl.searchParams.has('_r')) {
+        cleanUrl.searchParams.delete('_r');
+        window.history.replaceState({}, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+      }
+    } catch (_) {}
+
     // 仅在标准 Web 浏览器/静态托管 App 壳注册 Service Worker，支持应用内热更新与离线缓存
     const isNativeLocalShell = Boolean(window.plus || window.cordova);
     if (!isNativeLocalShell && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-      navigator.serviceWorker.register('./sw.js?v=6').then((reg) => {
+      navigator.serviceWorker.register('./sw.js?v=8').then((reg) => {
         reg.update().catch(() => {});
         reg.addEventListener('updatefound', () => {
           const nw = reg.installing;
@@ -236,6 +264,24 @@ window.App = (function () {
 
     window.addEventListener('resize', () => {
       if (state.activeTab === 'trends') renderAllCharts();
+    });
+
+    // App 后台挂起跨过午夜后切回前台时，自动切换至新一天并刷新对应数据
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState !== 'visible' || !state.profile) return;
+      const nowStr = formatLocalDate(new Date());
+      if (nowStr === state.todayStr) return;
+      const oldStr = state.todayStr;
+      state.todayStr = nowStr;
+      const dietInp = document.getElementById('dietDateInput');
+      const chkInp = document.getElementById('checkinDate');
+      if (dietInp && dietInp.value === oldStr) dietInp.value = nowStr;
+      if (chkInp && chkInp.value === oldStr) chkInp.value = nowStr;
+      try {
+        await loadDietForDate(nowStr);
+      } catch (_) {}
+      loadCheckinForDate(chkInp ? chkInp.value : nowStr);
+      renderAll();
     });
 
     try {
@@ -746,9 +792,11 @@ window.App = (function () {
     document.getElementById('modeBtnAuto').classList.toggle('active', mode === 'auto');
     document.getElementById('autoScheduleBox').style.display = mode === 'auto' ? 'block' : 'none';
     if (persist && state.profile) {
-      api('/api/profile', { method: 'POST', body: { schedule_mode: mode } }).then((res) => {
-        state.profile = res.profile;
-      });
+      api('/api/profile', { method: 'POST', body: { schedule_mode: mode } })
+        .then((res) => {
+          state.profile = res.profile;
+        })
+        .catch((e) => showToast(e.message));
     }
   }
 
@@ -855,13 +903,15 @@ window.App = (function () {
         extra.high_kcal_offset_pct = 0;
         extra.low_kcal_offset_pct = 0;
       }
-      api('/api/profile', { method: 'POST', body: { macro_strategy: strat, ...extra } }).then((res) => {
-        state.profile = res.profile;
-        state.plan = res.plan;
-        state.analytics = res.analytics;
-        renderAll();
-        showToast('已切换营养素计算策略');
-      });
+      api('/api/profile', { method: 'POST', body: { macro_strategy: strat, ...extra } })
+        .then((res) => {
+          state.profile = res.profile;
+          state.plan = res.plan;
+          state.analytics = res.analytics;
+          renderAll();
+          showToast('已切换营养素计算策略');
+        })
+        .catch((e) => showToast(e.message));
     }
   }
 
@@ -905,13 +955,17 @@ window.App = (function () {
       custom_bmr: customBmrRaw === '' ? null : Number(customBmrRaw),
       custom_target_kcal: customTargetRaw === '' ? null : Number(customTargetRaw),
     };
-    const res = await api('/api/profile', { method: 'POST', body });
-    state.profile = res.profile;
-    state.plan = res.plan;
-    state.analytics = res.analytics;
-    hydrateProfileForm();
-    renderAll();
-    showToast('代谢目标参数已更新！');
+    try {
+      const res = await api('/api/profile', { method: 'POST', body });
+      state.profile = res.profile;
+      state.plan = res.plan;
+      state.analytics = res.analytics;
+      hydrateProfileForm();
+      renderAll();
+      showToast('代谢目标参数已更新！');
+    } catch (e) {
+      showToast(e.message);
+    }
   }
 
   async function resetCustomMetabolism() {
@@ -1145,14 +1199,18 @@ window.App = (function () {
       fat_g: it.fat_g,
       source: 'ai_estimate',
     }));
-    const res = await api('/api/foods/logs', { method: 'POST', body: { items } });
-    state.dietFoods = res.today_foods;
-    if (dateStr === state.todayStr) state.todayFoods = res.today_foods;
-    state.analytics = res.analytics;
-    document.getElementById('aiFoodPreviewBox').style.display = 'none';
-    document.getElementById('aiFoodTextInput').value = '';
-    renderAll();
-    showToast('已记入饮食记录！');
+    try {
+      const res = await api('/api/foods/logs', { method: 'POST', body: { items } });
+      state.dietFoods = res.today_foods;
+      if (dateStr === state.todayStr) state.todayFoods = res.today_foods;
+      state.analytics = res.analytics;
+      document.getElementById('aiFoodPreviewBox').style.display = 'none';
+      document.getElementById('aiFoodTextInput').value = '';
+      renderAll();
+      showToast('已记入饮食记录！');
+    } catch (e) {
+      showToast(e.message);
+    }
   }
 
   function setFoodCategory(cat, el) {
@@ -1164,8 +1222,13 @@ window.App = (function () {
 
   async function searchFoodLibrary() {
     const q = document.getElementById('foodSearchInput').value.trim();
-    const res = await api(`/api/foods/search?q=${encodeURIComponent(q)}&category=${state.foodCategory}`);
-    state.currentSearchFoods = res.foods || [];
+    try {
+      const res = await api(`/api/foods/search?q=${encodeURIComponent(q)}&category=${state.foodCategory}`);
+      state.currentSearchFoods = res.foods || [];
+    } catch (e) {
+      showToast(e.message);
+      return;
+    }
     const listEl = document.getElementById('foodLibraryList');
     const tagMap = {
       high_friendly: '<span style="color:#FF6B35;font-weight:700;">[高碳优选]</span>',
@@ -1278,10 +1341,14 @@ window.App = (function () {
   }
 
   async function loadDietForDate(dateStr) {
-    const res = await api(`/api/foods/logs?date=${dateStr}`);
-    state.dietFoods = res.logs || [];
-    if (dateStr === state.todayStr) state.todayFoods = state.dietFoods;
-    renderDietLogged();
+    try {
+      const res = await api(`/api/foods/logs?date=${dateStr}`);
+      state.dietFoods = res.logs || [];
+      if (dateStr === state.todayStr) state.todayFoods = state.dietFoods;
+      renderDietLogged();
+    } catch (e) {
+      showToast(e.message);
+    }
   }
 
   function renderDietLogged() {
@@ -1316,11 +1383,15 @@ window.App = (function () {
 
   async function removeFoodLog(id) {
     const dateStr = document.getElementById('dietDateInput').value || state.todayStr;
-    const res = await api(`/api/foods/logs/${id}`, { method: 'DELETE' });
-    state.analytics = res.analytics;
-    await loadDietForDate(dateStr);
-    renderHome();
-    showToast('已删除饮食记录');
+    try {
+      const res = await api(`/api/foods/logs/${id}`, { method: 'DELETE' });
+      state.analytics = res.analytics;
+      await loadDietForDate(dateStr);
+      renderHome();
+      showToast('已删除饮食记录');
+    } catch (e) {
+      showToast(e.message);
+    }
   }
 
   // ==================== TAB 4: 每日打卡与趋势可视化 ====================
@@ -1352,7 +1423,15 @@ window.App = (function () {
       document.getElementById('chkWaist').value = state.profile.waist_cm || '';
       document.getElementById('chkHip').value = state.profile.hip_cm || '';
       document.getElementById('chkBf').value = '';
+      document.getElementById('chkSleep').value = 7.5;
+      document.getElementById('chkWorkout').value = 'strength_cardio';
+      document.getElementById('chkPerf').value = 4;
+      document.getElementById('chkHunger').value = 2;
       document.getElementById('chkNotes').value = '';
+      state.bodyStateSelected = '精力充沛';
+      document.querySelectorAll('#bodyStateChips .chip').forEach((c) => {
+        c.classList.toggle('active', c.textContent === state.bodyStateSelected);
+      });
     }
   }
 
@@ -1419,11 +1498,15 @@ window.App = (function () {
   }
 
   async function removeCheckin(dateStr) {
-    const res = await api(`/api/checkins/${encodeURIComponent(dateStr)}`, { method: 'DELETE' });
-    state.checkins = res.checkins;
-    state.analytics = res.analytics;
-    renderAll();
-    showToast(`已删除 ${dateStr} 打卡记录`);
+    try {
+      const res = await api(`/api/checkins/${encodeURIComponent(dateStr)}`, { method: 'DELETE' });
+      state.checkins = res.checkins;
+      state.analytics = res.analytics;
+      renderAll();
+      showToast(`已删除 ${dateStr} 打卡记录`);
+    } catch (e) {
+      showToast(e.message);
+    }
   }
 
   function setChartRange(days, el) {
@@ -1434,24 +1517,33 @@ window.App = (function () {
   }
 
   async function seedDemoData() {
-    const res = await api('/api/demo/seed', { method: 'POST', body: { days: 14, date: state.todayStr } });
-    state.checkins = res.checkins;
-    state.todayFoods = res.today_foods;
-    state.dietFoods = res.today_foods;
-    state.analytics = res.analytics;
-    loadCheckinForDate(state.todayStr);
-    renderAll();
-    showToast('已生成近14天碳循环打卡与饮食趋势样本！');
+    try {
+      const res = await api('/api/demo/seed', { method: 'POST', body: { days: 14, date: state.todayStr } });
+      state.checkins = res.checkins;
+      state.todayFoods = res.today_foods;
+      state.dietFoods = res.today_foods;
+      state.analytics = res.analytics;
+      loadCheckinForDate(state.todayStr);
+      renderAll();
+      showToast('已生成近14天碳循环打卡与饮食趋势样本！');
+    } catch (e) {
+      showToast(e.message);
+    }
   }
 
   async function clearDemoData() {
-    const res = await api('/api/demo/clear', { method: 'POST', body: { only_demo: false, date: state.todayStr } });
-    state.checkins = res.checkins;
-    state.todayFoods = res.today_foods;
-    state.dietFoods = res.today_foods;
-    state.analytics = res.analytics;
-    renderAll();
-    showToast('已清空记录数据');
+    try {
+      const res = await api('/api/demo/clear', { method: 'POST', body: { only_demo: true, date: state.todayStr } });
+      state.checkins = res.checkins;
+      state.todayFoods = res.today_foods;
+      state.dietFoods = res.today_foods;
+      state.analytics = res.analytics;
+      loadCheckinForDate(state.todayStr);
+      renderAll();
+      showToast('已清空样本数据（您的真实打卡与饮食已保留）');
+    } catch (e) {
+      showToast(e.message);
+    }
   }
 
   function renderAllCharts() {
@@ -1967,12 +2059,16 @@ window.App = (function () {
   }
 
   async function clearSavedApiKey() {
-    const saved = await api('/api/ai/settings', { method: 'POST', body: { clear_key: true } });
-    state.aiSettings = saved;
-    document.getElementById('aiCfgApiKey').value = '';
-    document.getElementById('aiSavedKeyHint').textContent = '密钥已清空';
-    updateHeaderAiBadge();
-    showToast('已清空保存的 API Key');
+    try {
+      const saved = await api('/api/ai/settings', { method: 'POST', body: { clear_key: true } });
+      state.aiSettings = saved;
+      document.getElementById('aiCfgApiKey').value = '';
+      document.getElementById('aiSavedKeyHint').textContent = '密钥已清空';
+      updateHeaderAiBadge();
+      showToast('已清空保存的 API Key');
+    } catch (e) {
+      showToast(e.message);
+    }
   }
 
   async function saveFullProfile() {
@@ -2009,6 +2105,17 @@ window.App = (function () {
   }
 
   // ==================== 方案一：应用内免重装热更新（Service Worker + version.json） ====================
+  function compareVersions(a, b) {
+    const pa = String(a || '').replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0);
+    const pb = String(b || '').replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+      const diff = (pa[i] || 0) - (pb[i] || 0);
+      if (diff !== 0) return diff > 0 ? 1 : -1;
+    }
+    return 0;
+  }
+
   function showUpdateBanner(remoteInfo) {
     const banner = document.getElementById('appUpdateBanner');
     if (!banner) return;
@@ -2048,7 +2155,7 @@ window.App = (function () {
         return;
       }
       const info = await resp.json();
-      if (info && info.version && String(info.version) !== APP_VERSION) {
+      if (info && info.version && compareVersions(info.version, APP_VERSION) > 0) {
         showUpdateBanner(info);
         if (manual) showToast(`发现新版本 v${info.version}，请点击顶部「立即更新」`);
       } else if (manual) {
